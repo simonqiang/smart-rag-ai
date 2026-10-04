@@ -409,7 +409,6 @@ The MVP is complete only when:
 The following decisions remain open until implementation or customer evidence supplies the missing information:
 
 - GLM model identifier, regional endpoint, and commercial data-processing terms;
-- confirmation of the proposed non-upload limits in §15;
 - packaging approach beyond Docker Compose for non-technical customers; and
 - target vertical after design-partner discovery.
 
@@ -431,7 +430,7 @@ Deferred decisions must be closed before the dependent implementation task begin
 | Chinese word segmenter dependency | Retrieval (Task 13) | Open — select by evaluation, then ask before adding |
 | GLM model, regional endpoint, account type, and commercial data-processing review | Live GLM adapter testing | Open |
 | Upload size limit | Public ingestion contract | Closed — §15 |
-| Page, crawl, corpus, and retention defaults | Task 1 profile pinning | Proposed — §15, owner confirms at Task 1 |
+| Page, crawl, corpus, and retention defaults | Task 1 profile pinning | Closed — §15 (owner confirmed 2026-10-05) |
 | Packaging beyond Docker Compose | Design-partner onboarding work | Open |
 | Initial vertical | Vertical-specific templates, terminology, or marketing work | Open — customer discovery track |
 
@@ -475,14 +474,16 @@ Model digests and measured latency for each profile are published in release not
 
 ### Limits
 
+Owner confirmed all limits on 2026-10-05.
+
 | Limit | Value | Status |
 |---|---|---|
 | Maximum upload size | 50 MB per file | Decided |
-| Maximum pages per document | 2,000 | Proposed |
-| Maximum decompressed size per file | 500 MB | Proposed |
-| Website crawl | 500 pages, depth 5, 30 minutes, 10 MB per response | Proposed |
-| Superseded-version and retired-page retention | 30 days | Proposed |
-| Conversation retention | 90 days | Proposed |
+| Maximum pages per document | 2,000 | Decided |
+| Maximum decompressed size per file | 500 MB | Decided |
+| Website crawl | 500 pages, depth 5, 30 minutes, 10 MB per response | Decided |
+| Superseded-version and retired-page retention | 30 days | Decided |
+| Conversation retention | 90 days | Decided |
 | Corpus scaling review | 100,000 chunks | Decided (§11) |
 
 ### Quality-gate cadence

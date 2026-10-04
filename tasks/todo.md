@@ -8,7 +8,7 @@ These are master work packages. Before implementation, any package larger than o
 
 ## Phase 0 — Decisions and evaluation
 
-- [ ] **Task 1: Pin the supported development profile and limits**
+- [x] **Task 1: Pin the supported development profile and limits**
   - Acceptance: Windows 11 x86_64, macOS Apple Silicon, and Ubuntu LTS x86_64 profiles; dependency versions; `qwen3:8b`/`bge-m3` (and compact `qwen3:4b`) model profiles; 50 MB upload limit; and owner-confirmed page/crawl/retention limits (spec §15) are recorded and machine-checkable. Includes the minimal `pyproject.toml`/`Makefile` bootstrap.
   - Verify: `make doctor` reports the profile and fails clearly, with platform-specific remediation, for missing requirements.
   - Dependencies: none.
