@@ -1,5 +1,8 @@
 """Task 4: in-process endpoint tests for live, readiness, and correlation."""
 
+import asyncio
+
+import pytest
 from fastapi.testclient import TestClient
 
 from apps.api import main as api
@@ -41,3 +44,19 @@ def test_correlation_middleware_echoes_incoming_and_generates_absent() -> None:
 
     assert echoed.headers["x-correlation-id"] == "given-123"
     assert len(generated.headers["x-correlation-id"]) == 12
+
+
+def test_readiness_success_paths_against_live_dependencies() -> None:
+    """Covers the healthy-probe branches; needs the Compose dependencies."""
+    from foundation.config import Settings
+
+    settings = Settings.load()
+    checker = api.ReadinessChecker(settings.database_url, settings.redis_url)
+    status, body = asyncio.run(checker.run())
+
+    if not body["checks"]["postgres"]["ok"]:
+        pytest.skip("Compose PostgreSQL not running (make up first)")
+
+    assert status == 200
+    assert body["status"] == "ready"
+    assert body["checks"]["redis"]["ok"] is True

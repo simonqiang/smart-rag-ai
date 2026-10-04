@@ -20,6 +20,9 @@ up:
 down:
 	docker compose down
 
+migrate:
+	$(UV) run alembic upgrade head
+
 doctor:
 	PYTHONPATH=src $(PYTHON) -m foundation.doctor
 

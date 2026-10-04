@@ -27,14 +27,14 @@ These are master work packages. Before implementation, any package larger than o
   - Acceptance: PostgreSQL/pgvector, Redis, API, worker, and web start with persistent paths and health endpoints.
   - Verify: `make up && make doctor` passes on the supported profile.
   - Dependencies: Task 3.
-- [ ] **Task 5: Implement persistence, jobs, storage, audit/outbox, and backup-inventory ports**
+- [x] **Task 5: Implement persistence, jobs, storage, audit/outbox, and backup-inventory ports**
   - Acceptance: migrations, idempotent jobs dispatched to Dramatiq only from committed PostgreSQL outbox entries, manifest storage, transactional audit/outbox behavior, and deletion-aware managed-backup inventory contracts are tested.
   - Verify: `make test-integration` passes restart/retry/rollback cases.
   - Dependencies: Task 4.
 
 ### Checkpoint A
 
-- [ ] Foundation build, coverage, health, persistence, and recovery gates pass.
+- [x] Foundation build, coverage, health, persistence, and recovery gates pass.
 
 ## Phase 2 — Identity and catalog
 
