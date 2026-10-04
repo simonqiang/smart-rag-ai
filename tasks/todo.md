@@ -19,7 +19,7 @@ These are master work packages. Before implementation, any package larger than o
 
 ## Phase 1 — Foundation
 
-- [ ] **Task 3: Scaffold the monorepo and blocking quality pipeline**
+- [x] **Task 3: Scaffold the monorepo and blocking quality pipeline**
   - Acceptance: web/API/worker packages build; every required lint/type/unit/integration/security/performance/E2E smoke/evaluation/coverage/build/licence/scan target runs through `make check` in CI; `make check-release` and the nightly workflow run the complete Playwright matrix and Windows/macOS/Linux install smoke tests.
   - Verify: `make check` passes; an intentional uncovered branch makes `make coverage` fail.
   - Dependencies: Task 1.

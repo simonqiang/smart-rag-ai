@@ -12,7 +12,6 @@ import pytest
 from foundation.config import Settings
 from foundation.doctor import CheckStatus, run_doctor
 
-
 # --- fakes -----------------------------------------------------------------
 
 
@@ -226,7 +225,7 @@ def test_all_models_present_pass(tmp_path):
 
 
 def test_report_includes_active_model_profile(tmp_path):
-    report, settings = run(tmp_path)
+    report, _settings = run(tmp_path)
     line = by_name(report, "active_profile").detail
     assert "recommended" in line
     assert "qwen3:8b" in line

@@ -1,0 +1,7 @@
+{
+  "name": "smart-rag-ai",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ]
+}

@@ -104,7 +104,7 @@ def probe_host() -> HostInfo:
 
 def default_runner(args: list[str]) -> tuple[int, str]:
     try:
-        proc = subprocess.run(args, capture_output=True, text=True, timeout=60)
+        proc = subprocess.run(args, capture_output=True, text=True, timeout=60, check=False)
         return proc.returncode, proc.stdout
     except (OSError, subprocess.TimeoutExpired):
         return 1, ""

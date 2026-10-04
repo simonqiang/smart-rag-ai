@@ -6,6 +6,16 @@ __pycache__/
 *.pyc
 .pytest_cache/
 build/
+.venv/
+.coverage
+coverage.xml
+htmlcov/
+
+# Node
+node_modules/
+dist/
+playwright-report/
+test-results/
 
 # Local runtime data (never commit knowledge or backups)
 data/
