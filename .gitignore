@@ -5,6 +5,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+build/
 
 # Local runtime data (never commit knowledge or backups)
 data/
