@@ -14,6 +14,7 @@ Smart RAG AI lets an SME turn its documents and website content into a private, 
 | [Application design](./application-design.md) | User roles, screens, workflows, states, and UX rules |
 | [System architecture](./system-architecture.md) | Components, boundaries, data flows, deployment, and provider switching |
 | [Knowledge lifecycle and security](./knowledge-lifecycle-and-security.md) | Versioning, freshness, deletion, permissions, privacy, backup, and audit behavior |
+| [Testing and quality strategy](./testing-and-quality-strategy.md) | TDD, >95% coverage gates, Playwright E2E scenarios, and deployment controls |
 | [Delivery roadmap](./delivery-roadmap.md) | Founder-focused phases, commercial validation, risks, and milestones |
 | [Canonical design specification](./superpowers/specs/2026-10-04-smart-rag-local-first-design.md) | Build contract, commands, project structure, engineering rules, testing, and acceptance criteria |
 

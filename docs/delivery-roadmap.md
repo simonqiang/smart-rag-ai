@@ -14,6 +14,7 @@ Avoid cloud platform work, billing, and a wide connector catalog until pilots de
 - Identify repeated questions, current search process, data sensitivity, and update frequency.
 - Select 3–5 design partners with accessible sample content.
 - Collect 50–100 representative questions with expected source evidence.
+- Include positive, negative, ambiguous, stale-version, and permission-denied cases and calculate every blocking RAG evaluation metric.
 - Define unacceptable failure cases, especially privacy and obsolete answers.
 - Confirm target PC hardware and supported operating systems.
 
@@ -24,6 +25,7 @@ Avoid cloud platform work, billing, and a wide connector catalog until pilots de
 **Outcome:** one local end-to-end path.
 
 - Docker Compose development environment.
+- Blocking quality pipeline with TDD commands, unit/integration coverage gates, and Playwright.
 - First-run owner setup.
 - Minimal member accounts, roles, collections, and retrieval grants.
 - PDF/TXT/Markdown upload.
@@ -31,7 +33,7 @@ Avoid cloud platform work, billing, and a wide connector catalog until pilots de
 - Ask flow with Ollama generation and citations.
 - Basic job status.
 
-**Exit gate:** a clean machine can ingest a small document set and answer a curated question with a valid citation.
+**Exit gate:** a clean machine can ingest a small document set and answer a curated question with a valid citation; all quality gates pass with greater-than-95% coverage.
 
 ## 4. Phase 2 — Trustworthy knowledge lifecycle
 

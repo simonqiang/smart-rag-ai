@@ -145,6 +145,7 @@ The MVP supports one company workspace per installation. The data model should r
 | Transparency | Users can see source health, answer citations, and provider mode |
 | Portability | AI, embedding, and storage implementations sit behind stable interfaces |
 | Operability | A non-developer can identify failed processing and retry it |
+| Testability | Every behavior follows TDD; automated coverage exceeds 95%; Playwright verifies happy and unhappy browser paths |
 
 ## 9. Product success measures
 

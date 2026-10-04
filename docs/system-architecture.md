@@ -70,8 +70,8 @@ Dependency direction follows the table and must not form cycles. Cross-module us
 | OCR | Tesseract adapter initially | Local, free OCR baseline |
 | Web extraction | HTTP crawler plus readability/content extraction; Playwright fallback | Cheap static path before browser rendering |
 | File storage | Local filesystem behind a storage interface | Minimal MVP operations; future S3-compatible adapter |
-| Unit/integration tests | pytest, Vitest, Testcontainers | Repeatable domain, API, database, and queue testing |
-| Browser tests | Playwright | Critical workflow coverage in a real browser |
+| Unit/integration tests | pytest, Vitest, Testcontainers | TDD-driven domain, API, database, and queue testing with enforced coverage |
+| Browser tests | Playwright | Happy and unhappy critical workflow coverage in a real browser |
 | Packaging | Docker Compose | Reproducible services on one development/office PC |
 | Observability | Structured logs, health endpoints, local metrics | Diagnosable without a hosted telemetry dependency |
 

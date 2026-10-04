@@ -2,6 +2,8 @@
 
 **Date:** 2026-10-04
 
+**Last updated:** 2026-10-05
+
 **Status:** Approved design; implementation plan not yet approved
 
 **Owner:** Founder/CTO
@@ -13,7 +15,7 @@ Build a local-first RAG web application for SMEs. Owners and administrators uplo
 
 The MVP runs on one PC. Ollama provides local generation and embeddings by default. The owner can switch answer generation to the GLM general API without changing code or re-indexing documents. Hosted generation is opt-in and visibly sends the answer policy, current question, selected passage text, citation labels/IDs, and—if enabled—up to four visible conversation messages outside the PC. Optional GLM query rewriting occurs before retrieval and sends only its rewrite policy, the current question, and the same optional conversation-history limit.
 
-Detailed product requirements are in [Product and MVP](../../product-and-mvp.md). UX behavior is in [Application design](../../application-design.md). Architecture and security requirements are in [System architecture](../../system-architecture.md) and [Knowledge lifecycle and security](../../knowledge-lifecycle-and-security.md).
+Detailed product requirements are in [Product and MVP](../../product-and-mvp.md). UX behavior is in [Application design](../../application-design.md). Architecture and security requirements are in [System architecture](../../system-architecture.md) and [Knowledge lifecycle and security](../../knowledge-lifecycle-and-security.md). Mandatory TDD, coverage, Playwright, and deployment gates are in [Testing and quality strategy](../../testing-and-quality-strategy.md).
 
 ## 2. Capability map and build order
 
@@ -131,8 +133,19 @@ make test-api
 # Run frontend tests
 make test-web
 
+# Run both backend and frontend unit/component suites
+make test-unit
+
 # Run browser-level tests
 make test-e2e
+
+# Run integration, security, and RAG evaluation suites
+make test-integration
+make test-security
+make test-evaluation
+
+# Enforce backend/frontend and critical-module coverage thresholds
+make coverage
 
 # Format and lint supported source files
 make lint
@@ -215,6 +228,10 @@ Conventions:
 
 ## 8. Testing strategy
 
+All behavior is developed through red–green–refactor TDD. Every new behavior starts with a focused test that fails for the expected reason. Every bug fix starts with a failing reproduction test. The minimum coverage gate is 96% for lines, statements, functions, and branches in every first-party package/module and in both backend and frontend aggregates. Changed executable lines require 100% line and branch coverage. Critical authorization, lifecycle, deletion, index-cutover, provider-privacy, citation, and crawl-policy modules require 100% branch coverage.
+
+Coverage exclusions are limited to generated contracts, vendor code, declarative migrations, and tool configuration, and every exclusion requires review. Coverage does not replace scenario quality or meaningful assertions.
+
 ### Unit tests
 
 - Source/version state transitions
@@ -255,18 +272,23 @@ Maintain a versioned dataset of questions, expected relevant sources/passages, a
 - stale-content leakage count; and
 - latency by hardware/provider profile.
 
-Evaluation changes are reviewed like code. A model or chunking change does not ship merely because a few examples look better.
+The initial blocking profile requires retrieval recall@10 ≥90%, mean reciprocal rank@10 ≥75%, citation correctness ≥98%, grounded-answer acceptance ≥95%, insufficient-evidence precision ≥90%, insufficient-evidence recall ≥85%, and exactly zero stale/unauthorized retrieval leakage. Evaluation changes are reviewed like code. A model or chunking change does not ship merely because a few examples look better.
 
 ### End-to-end tests
 
-- first-run setup;
-- upload to cited answer;
-- failed update retaining old knowledge;
-- successful replacement excluding old knowledge;
-- permission change affecting retrieval;
-- deletion and verification;
-- Ollama-to-GLM generation switch; and
-- backup/restore smoke workflow.
+Playwright is the required browser E2E framework. Each critical workflow includes its happy path and relevant unhappy paths:
+
+- first-run setup plus unavailable database, unwritable storage, and missing Ollama model;
+- upload to cited answer plus unsupported, corrupt, encrypted, oversized, and parser-failed files;
+- successful replacement plus processing failure retaining old knowledge and concurrent-update conflict;
+- website sync plus blocked target, timeout, unsafe redirect, and partial crawl;
+- grounded answer plus insufficient evidence, provider timeout, invalid response, and citation mismatch;
+- permission grant/revocation plus direct unauthorized URL/API/retrieval attempts;
+- deletion and verification plus non-owner, partial purge, and idempotent retry cases;
+- Ollama-to-GLM generation switch plus invalid credentials, unavailable provider, and no silent hosted fallback; and
+- backup/restore plus wrong key, corrupt archive, incompatible version, and deleted-source backup cases.
+
+The blocking Playwright suite uses deterministic local provider fakes. Optional live Ollama and GLM smoke tests are separate and do not replace it. Failed E2E runs retain redacted traces, screenshots, video, console output, and network logs.
 
 ## 9. Engineering boundaries
 
@@ -276,6 +298,7 @@ Evaluation changes are reviewed like code. A model or chunking change does not s
 - Apply workspace, permission, active-version, and deletion filters in retrieval storage queries.
 - Make jobs idempotent and observable.
 - Preserve the last good source/index until a replacement passes validation.
+- Follow red–green–refactor TDD for every behavior change and bug fix.
 - Run affected tests and `make check` before merge.
 - Update this specification before implementing a changed architectural decision.
 - Pin and audit dependencies used to parse untrusted files.
@@ -300,6 +323,7 @@ Evaluation changes are reviewed like code. A model or chunking change does not s
 - Log full prompts, raw sensitive passages, passwords, or API keys by default.
 - Execute instructions found inside ingested documents or webpages.
 - Remove failing tests merely to unblock delivery.
+- Lower coverage thresholds, add unjustified exclusions, or repeatedly rerun flaky tests until they happen to pass.
 
 ## 10. Operational requirements
 
@@ -311,6 +335,8 @@ Evaluation changes are reviewed like code. A model or chunking change does not s
 - Graceful shutdown stops accepting new work and returns in-progress jobs to a recoverable state.
 - Restore documentation names supported version compatibility and rollback limits.
 - The default deployment binds only to loopback. LAN mode exposes only a TLS reverse proxy and uses explicit host, origin, proxy, cookie, and firewall settings.
+- Packaging and deployment are blocked unless lint, type checks, unit/component, integration, security, Playwright E2E, RAG evaluation, coverage, build, and security scans all pass for the same revision.
+- Every deployable revision has a documented rollback to the last verified revision.
 
 ## 11. Performance targets
 
@@ -336,7 +362,9 @@ The MVP is complete only when:
 5. security tests cover permissions, crawl boundaries, prompt injection, secrets, and deletion;
 6. the owner can deliberately switch generation between Ollama and GLM without re-indexing;
 7. known limitations and hardware profiles are documented; and
-8. a design partner can complete the core workflow without developer intervention.
+8. every first-party package/module and both application aggregates meet the 96% line, statement, function, and branch thresholds, changed executable lines have 100% line/branch coverage, and designated critical modules have 100% branch coverage;
+9. Playwright happy and unhappy scenarios pass against the production build; and
+10. a design partner can complete the core workflow without developer intervention.
 
 ## 13. Deferred decisions
 
