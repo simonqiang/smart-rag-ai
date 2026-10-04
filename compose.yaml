@@ -1,0 +1,91 @@
+name: smart-rag
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: smart_rag
+      POSTGRES_USER: smart_rag
+      # Local-only default; the stack binds to loopback interfaces only.
+      POSTGRES_PASSWORD: ${SMART_RAG_DB_PASSWORD:-smart-rag-local}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "127.0.0.1:54329:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smart_rag -d smart_rag"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redisdata:/data
+    ports:
+      - "127.0.0.1:63899:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/app.Dockerfile
+    command: uvicorn apps.api.main:app --host 0.0.0.0 --port 8000
+    environment:
+      SMART_RAG_DATABASE_URL: postgresql+asyncpg://smart_rag:${SMART_RAG_DB_PASSWORD:-smart-rag-local}@postgres:5432/smart_rag
+      SMART_RAG_REDIS_URL: redis://redis:6379/0
+      SMART_RAG_OLLAMA_HOST: http://host.docker.internal:11434
+      SMART_RAG_DATA_DIR: /data
+      SMART_RAG_BACKUP_DIR: /backups
+    volumes:
+      - ./data:/data
+      - ./backups:/backups
+    ports:
+      - "127.0.0.1:8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/app.Dockerfile
+    command: dramatiq apps.worker.main --processes 1 --threads 2
+    environment:
+      SMART_RAG_DATABASE_URL: postgresql+asyncpg://smart_rag:${SMART_RAG_DB_PASSWORD:-smart-rag-local}@postgres:5432/smart_rag
+      SMART_RAG_REDIS_URL: redis://redis:6379/0
+      SMART_RAG_OLLAMA_HOST: http://host.docker.internal:11434
+      SMART_RAG_DATA_DIR: /data
+      SMART_RAG_BACKUP_DIR: /backups
+    volumes:
+      - ./data:/data
+      - ./backups:/backups
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  redisdata:

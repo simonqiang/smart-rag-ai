@@ -23,7 +23,7 @@ These are master work packages. Before implementation, any package larger than o
   - Acceptance: web/API/worker packages build; every required lint/type/unit/integration/security/performance/E2E smoke/evaluation/coverage/build/licence/scan target runs through `make check` in CI; `make check-release` and the nightly workflow run the complete Playwright matrix and Windows/macOS/Linux install smoke tests.
   - Verify: `make check` passes; an intentional uncovered branch makes `make coverage` fail.
   - Dependencies: Task 1.
-- [ ] **Task 4: Start and diagnose the local Compose stack**
+- [x] **Task 4: Start and diagnose the local Compose stack**
   - Acceptance: PostgreSQL/pgvector, Redis, API, worker, and web start with persistent paths and health endpoints.
   - Verify: `make up && make doctor` passes on the supported profile.
   - Dependencies: Task 3.

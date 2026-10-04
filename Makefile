@@ -14,6 +14,12 @@ setup:
 	$(UV) sync
 	$(NPM) install
 
+up:
+	docker compose up -d --build
+
+down:
+	docker compose down
+
 doctor:
 	PYTHONPATH=src $(PYTHON) -m foundation.doctor
 
