@@ -202,11 +202,16 @@ If no evidence clears the threshold, the system does not call the generator by d
 - Do not include raw source content, credentials, or full model prompts in user-visible diagnostics.
 - Explain the consequence of empty states and provide one primary next action.
 
-## 6. Accessibility and responsive behavior
+## 6. Accessibility and responsive device support
 
 - Meet WCAG 2.1 AA for keyboard navigation, focus, contrast, labels, and status announcements.
 - Do not encode source health or processing state using color alone.
-- Optimize primarily for desktop and tablet; maintain a usable mobile Ask experience.
+- Support the complete application on desktop, tablet/iPad-class, and mobile devices; mobile support is not limited to the Ask screen.
+- Use mobile-first responsive layouts verified at minimum at 320 px, 768 px, 1024 px, and 1440 px viewport widths.
+- Support tablet and mobile portrait and landscape orientations without losing data or blocking an action.
+- Adapt navigation, forms, tables, dialogs, citation panels, source management, activity, analytics, and settings to the available width.
+- Avoid hover-only interactions; every action must work with touch, keyboard, and pointer input.
+- Use touch targets of at least 44 by 44 CSS pixels and prevent unintended page-level horizontal scrolling.
 - Keep citations and provider/privacy state accessible to screen readers.
 
 ## 7. UX acceptance scenarios
@@ -214,6 +219,7 @@ If no evidence clears the threshold, the system does not call the generator by d
 - A first-time owner completes setup without editing configuration files.
 - A member can distinguish a cited answer from an unsupported response.
 - An administrator can identify why a file failed and retry it.
+- Owners, administrators, and members can complete their permitted workflows on desktop, tablet, and mobile viewports.
 - A user cannot discover a source through search, citations, or autocomplete without permission.
 - Before enabling GLM, the owner sees separate disclosures: generation sends the answer policy, current question, selected passage text, citation labels/IDs, and optionally up to four visible conversation messages; pre-retrieval query rewriting sends only its rewrite policy, the current question, and the same optional history limit.
 - A failed update never makes the current source disappear.

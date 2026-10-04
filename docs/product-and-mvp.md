@@ -122,7 +122,7 @@ The MVP supports one company workspace per installation. The data model should r
 ## 7. Explicitly out of scope for MVP
 
 - Public multi-tenant SaaS hosting
-- Native mobile applications
+- Native mobile applications; responsive mobile web support remains required
 - Autonomous actions in customer systems
 - Fine-tuning foundation models
 - Complex workflow or agent builders
@@ -146,6 +146,7 @@ The MVP supports one company workspace per installation. The data model should r
 | Portability | AI, embedding, and storage implementations sit behind stable interfaces |
 | Operability | A non-developer can identify failed processing and retry it |
 | Testability | Every behavior follows TDD; automated coverage exceeds 95%; Playwright verifies happy and unhappy browser paths |
+| Responsive UX | Every member and administration workflow works on desktop, tablet/iPad-class, and mobile devices |
 
 ## 9. Product success measures
 

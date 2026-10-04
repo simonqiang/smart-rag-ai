@@ -67,6 +67,8 @@ Changed executable lines also require 100% line and branch coverage in the pull 
 
 Playwright is the only MVP browser E2E framework. Tests run against a production build of the web application and API with isolated PostgreSQL, Redis, and file storage. AI and external website boundaries use deterministic local fakes for the blocking suite; separately marked live smoke tests may exercise Ollama or GLM when credentials and models are available.
 
+The blocking suite runs the complete role-based workflow set across Playwright projects representing mobile, tablet/iPad-class, and desktop devices. It verifies at least 320 px, 768 px, 1024 px, and 1440 px viewport widths, including portrait and landscape mobile/tablet orientations. Tests fail on clipped required controls, unintended page-level horizontal scrolling, inaccessible touch targets, or actions available only through hover.
+
 Each critical workflow has at least one happy path and relevant unhappy paths:
 
 | Workflow | Happy path | Required unhappy paths |

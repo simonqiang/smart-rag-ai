@@ -95,6 +95,13 @@ Each module is independently testable and should receive its own implementation 
 - A verified backup restores active knowledge and permissions into a clean compatible installation.
 - Managed backups are encrypted, with recovery keys stored separately by the owner.
 
+### Responsive device support
+
+- Every member and administration workflow is fully usable on desktop, tablet/iPad-class, and mobile devices.
+- Responsive layouts are verified at minimum at 320 px, 768 px, 1024 px, and 1440 px widths.
+- Mobile and tablet portrait/landscape modes preserve every required action and do not introduce unintended page-level horizontal scrolling.
+- Touch, keyboard, and pointer input are supported without hover-only controls; touch targets are at least 44 by 44 CSS pixels.
+
 ## 4. Technology stack
 
 - React + TypeScript + Vite
@@ -276,7 +283,7 @@ The initial blocking profile requires retrieval recall@10 ≥90%, mean reciproca
 
 ### End-to-end tests
 
-Playwright is the required browser E2E framework. Each critical workflow includes its happy path and relevant unhappy paths:
+Playwright is the required browser E2E framework. The blocking projects cover desktop, tablet/iPad-class, and mobile viewports, including portrait and landscape mobile/tablet orientations. Each critical workflow includes its happy path and relevant unhappy paths:
 
 - first-run setup plus unavailable database, unwritable storage, and missing Ollama model;
 - upload to cited answer plus unsupported, corrupt, encrypted, oversized, and parser-failed files;
@@ -364,7 +371,8 @@ The MVP is complete only when:
 7. known limitations and hardware profiles are documented; and
 8. every first-party package/module and both application aggregates meet the 96% line, statement, function, and branch thresholds, changed executable lines have 100% line/branch coverage, and designated critical modules have 100% branch coverage;
 9. Playwright happy and unhappy scenarios pass against the production build; and
-10. a design partner can complete the core workflow without developer intervention.
+10. every permitted workflow passes responsive Playwright coverage on desktop, tablet/iPad-class, and mobile projects; and
+11. a design partner can complete the core workflow without developer intervention.
 
 ## 13. Deferred decisions
 
