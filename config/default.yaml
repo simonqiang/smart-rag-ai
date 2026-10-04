@@ -1,0 +1,37 @@
+# Non-secret application defaults. Secrets are never written here; they are
+# provided through SMART_RAG_* environment variables at runtime.
+profile: recommended
+
+profiles:
+  recommended:
+    chat_model: qwen3:8b
+    embedding_model: bge-m3
+    embedding_dimensions: 1024
+  compact:
+    chat_model: qwen3:4b
+    embedding_model: bge-m3
+    embedding_dimensions: 1024
+
+limits:
+  upload_mb: 50
+  max_pages_per_document: 2000
+  decompressed_mb: 500
+  crawl:
+    max_pages: 500
+    max_depth: 5
+    max_minutes: 30
+    max_response_mb: 10
+  retention:
+    superseded_days: 30
+    conversation_days: 90
+
+paths:
+  data_dir: ./data
+  backup_dir: ./backups
+
+ollama_host: http://127.0.0.1:11434
+
+supported_platforms:
+  - windows11-x86_64
+  - macos-apple-silicon
+  - ubuntu-lts-x86_64
