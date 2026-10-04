@@ -60,14 +60,14 @@ Dependency direction follows the table and must not form cycles. Cross-module us
 | Backend | Python 3.12+, FastAPI, Pydantic | Strong document/AI ecosystem and typed HTTP contracts |
 | Persistence | PostgreSQL 16+ | Reliable transactional source activation and mature operations |
 | Vector search | `pgvector` | Keeps metadata and vectors transactionally close for MVP scale |
-| Keyword search | PostgreSQL full-text search | Avoids another search service during MVP |
+| Keyword search | PostgreSQL full-text search with language-aware tokenization | Avoids another search service during MVP; Chinese uses application-side segmentation |
 | Migrations | Alembic | Versioned, reviewable schema changes |
 | ORM/query | SQLAlchemy 2.x | Explicit transactions and broad PostgreSQL support |
 | Jobs | Redis plus Dramatiq | Simple durable background work, retries, and process separation |
 | Local generation | Ollama | Local inference with no per-call API charge |
 | Hosted generation | GLM general API through provider adapter | Optional higher-quality/cost-effective generation |
 | Parsing | Docling-led adapter pipeline | Structured extraction with format-specific escape hatches |
-| OCR | Tesseract adapter initially | Local, free OCR baseline |
+| OCR | Tesseract adapter with English, Chinese (Simplified/Traditional), and Malay language packs | Local, free OCR baseline |
 | Web extraction | HTTP crawler plus readability/content extraction; Playwright fallback | Cheap static path before browser rendering |
 | File storage | Local filesystem behind a storage interface | Minimal MVP operations; future S3-compatible adapter |
 | Unit/integration tests | pytest, Vitest, Testcontainers | TDD-driven domain, API, database, and queue testing with enforced coverage |
@@ -134,12 +134,15 @@ Core entities:
 - `collection`, `collection_grant`
 - `source`, `source_version`, `source_version_item`
 - `stored_object`, `extracted_artifact`
-- `chunk`, `chunk_location`
+- `chunk`, `chunk_location` (each chunk records its detected language)
 - `index_generation`, `chunk_embedding`
 - `crawl_definition`, `sync_run`, `crawled_page`
-- `job`, `job_attempt`
+- `job`, `job_attempt`, `outbox_event` (index-change ledger and job dispatch)
 - `conversation`, `message`, `answer_citation`, `answer_feedback`
-- `provider_configuration`, `audit_event`
+- `provider_configuration`, `provider_consent` (versioned owner acknowledgement), `audit_event`
+- `invitation`, `retention_policy`
+- `deletion_request`, `deletion_evidence`
+- `backup_manifest`, `backup_source_inventory`
 
 All knowledge-bearing records include `workspace_id`. Retrieval joins or filters against active source version, active index generation, collection grants, and non-deleted state in the database query itself.
 
@@ -147,19 +150,22 @@ All knowledge-bearing records include `workspace_id`. Retrieval joins or filters
 
 ```text
 Authenticate and authorize
-→ normalize question
+→ normalize question and detect its language
 → optional query rewrite
 → semantic retrieval with authorization/version filters
-→ keyword retrieval with the same filters
-→ merge and deduplicate
-→ rerank
+→ language-aware keyword retrieval with the same filters
+→ merge and deduplicate with reciprocal-rank fusion
 → confidence/evidence gate
 → generate using Ollama or GLM
 → validate citation identifiers
 → return answer and evidence
 ```
 
-Initial retrieval should favor simple, observable scoring. Add sophisticated query routing only after evaluation data demonstrates a specific failure.
+Initial retrieval should favor simple, observable scoring. Reciprocal-rank fusion is the MVP ranking method; a local cross-encoder reranker sits behind the same ranking interface and is added only when evaluation data shows a ranking failure it fixes. Add sophisticated query routing only after evaluation data demonstrates a specific failure.
+
+### Multilingual keyword search
+
+PostgreSQL full-text search has no Chinese tokenizer and no Malay stemmer. Each chunk therefore stores its detected language and a keyword vector built as follows: English with the `english` configuration, Malay with `simple`, and Chinese by application-side word segmentation followed by `simple`. Questions are processed the same way. The embedding model (`bge-m3`) is multilingual, so semantic retrieval does not depend on this step. The segmenter is chosen by evaluation in Task 13 and is part of the index compatibility key.
 
 ## 8. Local deployment topology
 
@@ -174,6 +180,24 @@ Docker Compose runs:
 Ollama may run natively on the host to use platform GPU acceleration reliably. The Compose configuration connects to the host endpoint. A fully containerized Ollama profile may be offered where supported.
 
 Persistent host directories store PostgreSQL data, originals/derived artifacts, and backup output. Redis is not the source of truth; a job record in PostgreSQL supports recovery and diagnosis.
+
+Jobs are dispatched through the transactional outbox: a state change, its job record (with a stable job ID), and an outbox entry commit in one PostgreSQL transaction. A dispatcher relays committed entries to Dramatiq on Redis and marks the entry published once the broker accepts it. Publication state and execution state are separate:
+
+- A worker first claims the job atomically in PostgreSQL (`queued`/`retryable` → `running`) with a renewable lease. A duplicate message for a job that is already claimed or completed exits without doing work.
+- An expired lease returns the job to `retryable`, so a crashed worker's job can be claimed again.
+- If Redis is lost, the dispatcher re-publishes entries whose jobs are still `queued` or `retryable`; the claim step makes duplicates harmless.
+
+This removes the dual-write gap between PostgreSQL and Redis without allowing two workers to run the same job concurrently.
+
+### Supported platforms
+
+| Platform | Container runtime | Ollama |
+|---|---|---|
+| Windows 11 x86_64 | Docker Desktop with WSL2 | Native Windows app |
+| macOS 14+ on Apple Silicon | Docker Desktop | Native app with Metal acceleration |
+| Ubuntu 22.04/24.04 LTS x86_64 | Docker Engine + Compose plugin | Native service |
+
+Host paths, line endings, file locking, and `host.docker.internal` resolution differ between these platforms. Configuration and scripts must use platform-neutral Python helpers, and `make doctor` reports platform-specific remediation.
 
 ### Network exposure
 

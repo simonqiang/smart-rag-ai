@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-10-05
 
-**Status:** Approved design; implementation plan not yet approved
+**Status:** Approved design; implementation plan reviewed 2026-10-05 and awaiting execution approval
 
 **Owner:** Founder/CTO
 **Primary audience:** Product owner and implementation engineer
@@ -53,6 +53,9 @@ Each module is independently testable and should receive its own implementation 
 - A documented command starts all required application services on a supported PC.
 - The first-run wizard creates the owner and verifies storage, database, Redis, and Ollama connectivity.
 - Missing local models produce an actionable instruction rather than a stack trace.
+- The same documented setup works on each supported operating system in §15.
+- An owner who loses their password can recover access only through an audited host-local command; there is no remote reset path.
+- Owners and administrators add members with a single-use, expiring invitation or temporary password that must be changed at first sign-in.
 
 ### Ingestion
 
@@ -60,11 +63,13 @@ Each module is independently testable and should receive its own implementation 
 - Corrupt, encrypted, unsupported, or over-limit content fails safely with a reason.
 - A source is not searchable until its complete version passes validation and becomes active.
 - Website crawls stay within configured host/path and resource limits.
+- English, Chinese (Simplified and Traditional), and Malay content is extracted, searchable by keyword and meaning, and cited correctly, including mixed-language documents.
 
 ### Retrieval and answers
 
 - Every retrieval applies workspace, user grant, source state, active-version, and active-index filters.
-- Search combines semantic and keyword evidence.
+- Search combines semantic and keyword evidence using reciprocal-rank fusion; a cross-encoder reranker is added only when the evaluation report shows a ranking failure it fixes.
+- Answers are written in the language of the question unless the user asks otherwise; citations always quote the source language.
 - Factual answers contain validated citations to supplied evidence.
 - Weak retrieval returns an insufficient-evidence response.
 - Source text cannot instruct the system to ignore policy, expose secrets, or execute tools.
@@ -78,6 +83,7 @@ Each module is independently testable and should receive its own implementation 
 - Deletion verification confirms no retrievable or stored source content remains, including in application-managed backups.
 - Only the owner can permanently delete a source; administrators may archive it.
 - Managed backups containing a permanently deleted source are removed before deletion is verified.
+- Superseded versions, retired snapshot pages, and conversations are purged automatically when their configured retention expires, using the same manifest-driven purge and verification path as deletion.
 
 ### Model providers
 
@@ -107,11 +113,12 @@ Each module is independently testable and should receive its own implementation 
 - React + TypeScript + Vite
 - FastAPI + Pydantic + SQLAlchemy + Alembic
 - PostgreSQL + `pgvector` + PostgreSQL full-text search
-- Redis + Dramatiq workers
+- Redis + Dramatiq workers, dispatched from PostgreSQL job records through the transactional outbox (Redis never receives a job whose record did not commit)
 - Local filesystem storage behind a stable object-storage interface
 - Ollama for default local generation and embeddings
 - GLM general API adapter for optional hosted generation
-- Docling-led parsing adapters with local OCR
+- Docling-led parsing adapters with local Tesseract OCR (English, Simplified/Traditional Chinese, Malay language packs)
+- Language-aware keyword indexing: PostgreSQL `english` and `simple` text-search configurations plus application-side Chinese word segmentation (segmenter selected by evaluation in Task 13)
 - pytest, Vitest, Testcontainers, and Playwright
 - Docker Compose for the local topology
 
@@ -131,8 +138,11 @@ make up
 # Stop services without deleting persistent data
 make down
 
-# Run all automated checks
+# Run all automated checks (PR gate: Playwright smoke projects)
 make check
+
+# Run the release gate (make check plus the full Playwright device matrix)
+make check-release
 
 # Run backend tests
 make test-api
@@ -162,7 +172,12 @@ make backup
 
 # Display service health and sanitized diagnostics
 make doctor
+
+# Recover owner access from the host PC (audited; never deletes data)
+make reset-owner-password
 ```
+
+Every command works identically on the supported operating systems in §15. Windows hosts run `make` through the documented WSL2 or Git Bash toolchain; scripts are written in Python rather than shell where portability matters.
 
 No standard command may delete application data. Any future reset command must require an explicit target and confirmation.
 
@@ -281,9 +296,17 @@ Maintain a versioned dataset of questions, expected relevant sources/passages, a
 
 The initial blocking profile requires retrieval recall@10 ≥90%, mean reciprocal rank@10 ≥75%, citation correctness ≥98%, grounded-answer acceptance ≥95%, insufficient-evidence precision ≥90%, insufficient-evidence recall ≥85%, and exactly zero stale/unauthorized retrieval leakage. Evaluation changes are reviewed like code. A model or chunking change does not ship merely because a few examples look better.
 
+Metric measurement is defined so the blocking gate is deterministic:
+
+- Retrieval, ranking, leakage, and insufficient-evidence metrics are computed by code against labelled expected passages and run on every `make test-evaluation`.
+- Citation correctness is computed by code: every citation ID must belong to the supplied evidence and its span must contain the quoted claim.
+- Grounded-answer acceptance replays recorded provider responses through the current end-to-end answer pipeline on every evaluation and compares the results with human-labelled judgments. Recorded sets are bound to a digest of the prompt, answer pipeline, and model profile; a relevant change invalidates them. An optional local LLM judge may be reported as advisory but never decides a blocking gate.
+- Live-model evaluation (new answers from a real Ollama or GLM profile) is a release gate for that model profile, not a per-commit gate; its seed, model digest, and parameters are recorded.
+- The dataset contains English, Simplified Chinese, Traditional Chinese, Malay, and mixed-language cases for every case class, and metrics are reported per stratum as well as in aggregate. Each stratum must meet the blocking thresholds independently.
+
 ### End-to-end tests
 
-Playwright is the required browser E2E framework. The blocking projects cover desktop, tablet/iPad-class, and mobile viewports, including portrait and landscape mobile/tablet orientations. Each critical workflow includes its happy path and relevant unhappy paths:
+Playwright is the required browser E2E framework. The complete projects, which block nightly and release, cover desktop, tablet/iPad-class, and mobile viewports, including portrait and landscape mobile/tablet orientations. Each critical workflow includes its happy path and relevant unhappy paths:
 
 - first-run setup plus unavailable database, unwritable storage, and missing Ollama model;
 - upload to cited answer plus unsupported, corrupt, encrypted, oversized, and parser-failed files;
@@ -297,6 +320,12 @@ Playwright is the required browser E2E framework. The blocking projects cover de
 
 The blocking Playwright suite uses deterministic local provider fakes. Optional live Ollama and GLM smoke tests are separate and do not replace it. Failed E2E runs retain redacted traces, screenshots, video, console output, and network logs.
 
+E2E cadence:
+
+- **Every pull request / `make check`:** Playwright smoke projects (one mobile portrait, one tablet landscape, one desktop) run every critical workflow's happy path and the unhappy paths touched by the change.
+- **Nightly on `main` and `make check-release`:** the complete matrix (320/768/1024/1440 widths, mobile/tablet portrait and landscape, every happy and unhappy path, accessibility scans). A nightly failure blocks further merges until fixed.
+- **Packaging:** only a revision that passed `make check-release` may be packaged. The full matrix therefore remains blocking for every release.
+
 ## 9. Engineering boundaries
 
 ### Always do
@@ -309,6 +338,7 @@ The blocking Playwright suite uses deterministic local provider fakes. Optional 
 - Run affected tests and `make check` before merge.
 - Update this specification before implementing a changed architectural decision.
 - Pin and audit dependencies used to parse untrusted files.
+- Check every new dependency's licence is compatible with Apache-2.0 distribution; copyleft network licences (for example AGPL, which covers PyMuPDF) are not allowed in shipped code.
 
 ### Ask first
 
@@ -342,7 +372,7 @@ The blocking Playwright suite uses deterministic local provider fakes. Optional 
 - Graceful shutdown stops accepting new work and returns in-progress jobs to a recoverable state.
 - Restore documentation names supported version compatibility and rollback limits.
 - The default deployment binds only to loopback. LAN mode exposes only a TLS reverse proxy and uses explicit host, origin, proxy, cookie, and firewall settings.
-- Packaging and deployment are blocked unless lint, type checks, unit/component, integration, security, Playwright E2E, RAG evaluation, coverage, build, and security scans all pass for the same revision.
+- Packaging and deployment are blocked unless lint, type checks, unit/component, integration, security, the full Playwright E2E matrix, RAG evaluation, coverage, build, and security scans all pass for the same revision (`make check-release`).
 - Every deployable revision has a documented rollback to the last verified revision.
 
 ## 11. Performance targets
@@ -365,7 +395,7 @@ The MVP is complete only when:
 1. all functional acceptance criteria in this specification pass;
 2. all supported formats have fixtures and location-aware citation tests;
 3. the evaluation report meets the pilot's agreed quality thresholds with zero stale/unauthorized retrieval leakage;
-4. setup and restore are verified on a clean supported machine;
+4. setup and restore are verified on a clean machine for each supported operating system in §15;
 5. security tests cover permissions, crawl boundaries, prompt injection, secrets, and deletion;
 6. the owner can deliberately switch generation between Ollama and GLM without re-indexing;
 7. known limitations and hardware profiles are documented; and
@@ -376,14 +406,14 @@ The MVP is complete only when:
 
 ## 13. Deferred decisions
 
-The following decisions are intentionally deferred until implementation planning or customer evidence supplies the missing information:
+The following decisions remain open until implementation or customer evidence supplies the missing information:
 
-- first officially supported operating systems;
-- exact Ollama chat and embedding model profiles;
-- GLM model identifier and commercial data-processing terms;
-- default file-size, crawl, retention, and corpus limits;
+- GLM model identifier, regional endpoint, and commercial data-processing terms;
+- confirmation of the proposed non-upload limits in §15;
 - packaging approach beyond Docker Compose for non-technical customers; and
 - target vertical after design-partner discovery.
+
+Decisions closed on 2026-10-05 are recorded in §15.
 
 These are bounded configuration/product decisions, not gaps in the architectural safety model.
 
@@ -391,13 +421,70 @@ These are bounded configuration/product decisions, not gaps in the architectural
 
 Deferred decisions must be closed before the dependent implementation task begins:
 
-| Gate | Must be decided before |
-|---|---|
-| Primary supported operating system and CPU architecture | Foundation/container scaffolding |
-| Ollama chat and embedding model profiles | AI-provider contract and performance fixtures |
-| GLM model, account type, and commercial data-processing review | Live GLM adapter testing |
-| File, crawl, corpus, and retention defaults | Public ingestion and settings contracts |
-| Packaging beyond Docker Compose | Design-partner onboarding work |
-| Initial vertical | Vertical-specific templates, terminology, or marketing work |
+| Gate | Must be decided before | Status |
+|---|---|---|
+| Supported operating systems and CPU architectures | Foundation/container scaffolding | Closed — §15 |
+| Ollama chat and embedding model profiles | AI-provider contract and performance fixtures | Closed — §15 |
+| Supported content languages | Evaluation dataset, extraction, keyword index | Closed — §15 |
+| Job queue technology | Foundation jobs (Task 5) | Closed — §15 |
+| Reranking approach | Retrieval (Task 13) | Closed — §15 |
+| Chinese word segmenter dependency | Retrieval (Task 13) | Open — select by evaluation, then ask before adding |
+| GLM model, regional endpoint, account type, and commercial data-processing review | Live GLM adapter testing | Open |
+| Upload size limit | Public ingestion contract | Closed — §15 |
+| Page, crawl, corpus, and retention defaults | Task 1 profile pinning | Proposed — §15, owner confirms at Task 1 |
+| Packaging beyond Docker Compose | Design-partner onboarding work | Open |
+| Initial vertical | Vertical-specific templates, terminology, or marketing work | Open — customer discovery track |
 
 The implementation plan must record each decision or explicitly stop before the dependent task. No engineer should infer a default silently.
+
+## 15. Decision record
+
+Decisions closed during the 2026-10-05 plan review:
+
+### Supported platforms
+
+| Platform | Architecture | Container runtime | Ollama | Notes |
+|---|---|---|---|---|
+| Windows 11 | x86_64 | Docker Desktop (WSL2 backend) | Native Windows app | Most common SME office PC; NVIDIA GPU optional |
+| macOS 14+ | Apple Silicon (arm64) | Docker Desktop | Native app (Metal acceleration) | Reference development machine: macOS arm64, 32 GB |
+| Linux (Ubuntu 22.04/24.04 LTS) | x86_64 | Docker Engine + Compose plugin | Native service | NVIDIA GPU optional |
+
+Intel Macs, Windows on ARM, and Linux arm64 are not supported for the MVP. Docker Desktop requires a paid subscription for larger organizations under its licence terms; the operator guide must state this and name the tested alternative, if any. CI runs unit/integration suites on Linux and runs `make doctor` plus install smoke tests on all three platforms.
+
+### Content languages
+
+- Supported content: English, Chinese (Simplified and Traditional), and Malay, including mixed-language documents.
+- Embeddings: `bge-m3` (multilingual) so one index serves all three languages.
+- Keyword search: each chunk records a detected language. English uses the PostgreSQL `english` configuration; Malay uses `simple`; Chinese is segmented in the application before being indexed with `simple`. Language configuration is part of the index-generation compatibility key.
+- OCR: Tesseract `eng`, `chi_sim`, `chi_tra`, and `msa` language packs.
+- The user interface is English for the MVP. Answers follow the question language.
+
+### Model profiles
+
+| Profile | Chat model | Embedding model | Use |
+|---|---|---|---|
+| Recommended (32 GB) | `qwen3:8b` | `bge-m3` (1024 dimensions) | Default pilot profile |
+| Compact (16 GB) | `qwen3:4b` (to be benchmarked) | `bge-m3` | Development and small pilots |
+
+Model digests and measured latency for each profile are published in release notes.
+
+### Jobs and retrieval
+
+- Job queue: Redis + Dramatiq is retained. A job's PostgreSQL record and its outbox entry commit together; a dispatcher relays committed entries to Dramatiq, and workers acknowledge only after the job completes successfully.
+- Reranking: reciprocal-rank fusion of semantic and keyword results for the MVP. A local cross-encoder is added only if the evaluation report shows a ranking failure it fixes.
+
+### Limits
+
+| Limit | Value | Status |
+|---|---|---|
+| Maximum upload size | 50 MB per file | Decided |
+| Maximum pages per document | 2,000 | Proposed |
+| Maximum decompressed size per file | 500 MB | Proposed |
+| Website crawl | 500 pages, depth 5, 30 minutes, 10 MB per response | Proposed |
+| Superseded-version and retired-page retention | 30 days | Proposed |
+| Conversation retention | 90 days | Proposed |
+| Corpus scaling review | 100,000 chunks | Decided (§11) |
+
+### Quality-gate cadence
+
+The pull-request gate runs the Playwright smoke projects; the complete device matrix runs nightly and in `make check-release`, which blocks every package (see §8).

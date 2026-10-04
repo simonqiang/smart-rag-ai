@@ -117,6 +117,20 @@ Verification records zero counts for every knowledge table, vector generation, m
 
 Managed backup manifests list included source IDs. After a source deletion, the application creates a clean encrypted backup when backups are enabled, then removes every managed backup containing the deleted source before marking deletion verified. External backup copies are outside application control and are explicitly the owner's responsibility.
 
+This trade-off is intentional: deleting a source removes earlier restore points that contain it. The owner sees this impact before confirming deletion. If the clean replacement backup cannot be created, deletion stays `deletion_failed` with the backup step as the failed target, and retrieval exclusion remains in force.
+
+### Retention purge
+
+Superseded versions, retired website pages, unreferenced content-addressed artifacts, and expired conversations are purged by a scheduled retention job when their retention period ends (defaults in the canonical specification §15; the owner may shorten them). Retention purge reuses the deletion worker's manifest-driven purge, reference counting, and zero-count verification, but it never touches an active version or an artifact referenced by an active snapshot. Each run records an audit event with counts only.
+
+Purge must not race with rollback, activation, or snapshot reuse:
+
+1. A purge transaction claims each candidate by moving it to `purging` under a row lock, rechecking that it is still expired, not active, not the source of an in-progress rollback, and has a zero reference count.
+2. Rollback, activation, and snapshot reuse lock the same rows and refuse a version or artifact in `purging`; a rollback whose source version was claimed fails with an actionable message.
+3. Immediately before each destructive file or vector operation, the worker rechecks the claim and reference count under lock. If either changed, it releases the claim without deleting anything.
+
+Managed-backup expiry uses the same policy record and is implemented with the backup service (Task 24).
+
 ## 8. Retrieval authorization
 
 Authorization is enforced in the retrieval query using:
@@ -174,6 +188,10 @@ No automatic fallback may change a request from local to hosted processing.
 - Generate application secrets during setup; never ship a universal default.
 - Redact API keys in configuration views after saving.
 - Restrict provider configuration, permanent deletion, backup, and restore to the owner. Deletion verification is automatic; the owner can inspect its evidence.
+- Add members through single-use invitations or temporary passwords that expire and must be changed at first sign-in. Invitation tokens are stored hashed.
+- Throttle repeated sign-in failures per account and per client address.
+- A local installation has no email service, so there is no remote password reset. An owner who loses access runs `make reset-owner-password` on the host PC. It revokes all of that owner's sessions, records an audit event, and never deletes data. Administrators and members are reset by an owner or administrator in the application.
+- Owner recovery runs only on the host as the operating-system account that owns the installation's data directory, and it is never reachable through HTTP or a worker job. The new password is read interactively without echo (or from protected standard input); it is never accepted as a command-line argument or environment variable and never appears in logs, process listings, or audit metadata.
 
 For a local installation, recommend full-disk encryption and an operating-system account dedicated to the application host.
 
@@ -182,8 +200,10 @@ For a local installation, recommend full-disk encryption and an operating-system
 Record at minimum:
 
 - sign-in failures and security-sensitive session events;
+- invitations, password resets, and host-local owner recovery;
 - user/role/grant changes;
 - source creation, activation, rollback, archive, and deletion;
+- retention purge runs (counts only);
 - crawl-policy and schedule changes;
 - provider changes and connection-test outcome;
 - embedding index activation;

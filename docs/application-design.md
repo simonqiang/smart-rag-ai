@@ -73,6 +73,25 @@ The Ask screen contains:
 
 An answer citation opens the referenced passage with the query terms highlighted. The interface distinguishes direct evidence from explanatory model text.
 
+The conversation list lets a user reopen, rename, and delete their own conversations. Each conversation shows when it will expire under the retention policy. Reopened conversations re-authorize every citation when it is opened.
+
+The answer is written in the question's language. Citations quote the source passage in its original language, so a Chinese source cited for an English question shows the Chinese passage.
+
+### 3.2a Users and access
+
+Owners and administrators can:
+
+- invite a member with a single-use, expiring link or temporary password and choose role and collections;
+- see pending, accepted, and expired invitations and revoke them;
+- reset another user's password (owners can reset administrators; administrators can reset members); and
+- disable a user, which revokes their sessions immediately.
+
+The owner's own lost password is recovered on the host PC with `make reset-owner-password`; the sign-in screen explains this instead of offering an email reset.
+
+### 3.2b Retention settings
+
+The owner sees and may shorten the retention periods for superseded versions, retired website pages, conversations, and managed backups. The screen shows the next scheduled purge and the counts purged by the last run.
+
 ### 3.3 Sources
 
 The source table includes:
@@ -178,7 +197,7 @@ If the crawl fails before validation, the last successful snapshot remains activ
 1. API authenticates the user and resolves accessible collections.
 2. Query service rewrites the question only when configured and retains the original.
 3. Retrieval searches active, authorized chunks using semantic and keyword signals.
-4. Reranking selects the strongest evidence and applies confidence thresholds.
+4. Reciprocal-rank fusion merges semantic and keyword results, selects the strongest evidence, and applies confidence thresholds.
 5. Generation provider receives the question, evidence, and answer policy.
 6. Citation validator confirms that cited identifiers exist in the evidence set.
 7. Answer, citations, latency, provider/model metadata, and feedback hooks are returned.
@@ -205,6 +224,7 @@ If no evidence clears the threshold, the system does not call the generator by d
 ## 6. Accessibility and responsive device support
 
 - Meet WCAG 2.1 AA for keyboard navigation, focus, contrast, labels, and status announcements.
+- Render Chinese and Malay content correctly (fonts, line breaking, and `lang` attributes on passages) even though the interface text is English for the MVP.
 - Do not encode source health or processing state using color alone.
 - Support the complete application on desktop, tablet/iPad-class, and mobile devices; mobile support is not limited to the Ask screen.
 - Use mobile-first responsive layouts verified at minimum at 320 px, 768 px, 1024 px, and 1440 px viewport widths.
@@ -217,6 +237,8 @@ If no evidence clears the threshold, the system does not call the generator by d
 ## 7. UX acceptance scenarios
 
 - A first-time owner completes setup without editing configuration files.
+- An owner who forgot their password recovers access on the host PC without losing data.
+- A member asks in Chinese, English, or Malay and receives an answer in that language with correctly cited source passages.
 - A member can distinguish a cited answer from an unsupported response.
 - An administrator can identify why a file failed and retry it.
 - Owners, administrators, and members can complete their permitted workflows on desktop, tablet, and mobile viewports.

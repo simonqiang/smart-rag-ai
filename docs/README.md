@@ -17,6 +17,7 @@ Smart RAG AI lets an SME turn its documents and website content into a private, 
 | [Testing and quality strategy](./testing-and-quality-strategy.md) | TDD, >95% coverage gates, Playwright E2E scenarios, and deployment controls |
 | [Delivery roadmap](./delivery-roadmap.md) | Founder-focused phases, commercial validation, risks, and milestones |
 | [Canonical design specification](./superpowers/specs/2026-10-04-smart-rag-local-first-design.md) | Build contract, commands, project structure, engineering rules, testing, and acceptance criteria |
+| [Implementation plan](./superpowers/plans/2026-10-05-smart-rag-mvp-implementation.md) | Task-by-task TDD execution plan; schedule in [tasks/plan.md](../tasks/plan.md), tracking in [tasks/todo.md](../tasks/todo.md) |
 
 ## Key decisions
 
@@ -28,6 +29,10 @@ Smart RAG AI lets an SME turn its documents and website content into a private, 
 - A newly processed source version becomes searchable only after the complete version passes validation.
 - Superseded and deleted content is never eligible for normal retrieval.
 - Every factual answer must include source citations or explicitly say that the evidence is insufficient.
+- Supported platforms: Windows 11 x86_64, macOS on Apple Silicon, and Ubuntu LTS x86_64.
+- Supported content languages: English, Chinese (Simplified and Traditional), and Malay; the interface is English for the MVP.
+- Default local models: `qwen3:8b` for generation and `bge-m3` for multilingual embeddings.
+- Closed decisions are recorded in the [canonical specification §15](./superpowers/specs/2026-10-04-smart-rag-local-first-design.md).
 
 ## Intended readers
 

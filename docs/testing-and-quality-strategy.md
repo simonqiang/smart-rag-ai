@@ -67,18 +67,28 @@ Changed executable lines also require 100% line and branch coverage in the pull 
 
 Playwright is the only MVP browser E2E framework. Tests run against a production build of the web application and API with isolated PostgreSQL, Redis, and file storage. AI and external website boundaries use deterministic local fakes for the blocking suite; separately marked live smoke tests may exercise Ollama or GLM when credentials and models are available.
 
-The blocking suite runs the complete role-based workflow set across Playwright projects representing mobile, tablet/iPad-class, and desktop devices. It verifies at least 320 px, 768 px, 1024 px, and 1440 px viewport widths, including portrait and landscape mobile/tablet orientations. Tests fail on clipped required controls, unintended page-level horizontal scrolling, inaccessible touch targets, or actions available only through hover.
+The complete (nightly and release-blocking) suite runs the role-based workflow set across Playwright projects representing mobile, tablet/iPad-class, and desktop devices. It verifies at least 320 px, 768 px, 1024 px, and 1440 px viewport widths, including portrait and landscape mobile/tablet orientations. Tests fail on clipped required controls, unintended page-level horizontal scrolling, inaccessible touch targets, or actions available only through hover.
+
+The suite runs at two cadences so after-hours development stays fast without weakening the release bar:
+
+| Gate | When | Playwright scope |
+|---|---|---|
+| `make check` (PR blocking smoke suite) | Every pull request and local pre-commit | Smoke projects (mobile portrait, tablet landscape, desktop): every critical happy path plus unhappy paths touched by the change |
+| Nightly | Every night on `main` | Complete matrix: all widths and orientations, all happy and unhappy paths, accessibility scans |
+| `make check-release` | Before any package or deployment | `make check` plus the complete matrix on the same revision |
+
+A nightly failure is a blocking defect: no further feature merges until it is fixed or reverted. Only a revision that passed `make check-release` may be packaged.
 
 Each critical workflow has at least one happy path and relevant unhappy paths:
 
 | Workflow | Happy path | Required unhappy paths |
 |---|---|---|
 | First-run setup | Owner reaches first cited answer | Database unavailable, storage unwritable, Ollama unavailable/model missing |
-| Sign-in/access | Authorized member sees permitted collections | Wrong password, expired session, restricted collection/source |
+| Sign-in/access | Authorized member sees permitted collections; invited member accepts invitation | Wrong password, expired session, expired/reused invitation, restricted collection/source, repeated-failure throttling |
 | Document upload | Supported file becomes active/searchable | Unsupported, corrupt, encrypted, oversized, parser/OCR failure |
 | Document replacement | New version activates and old version disappears from retrieval | Processing failure preserves old version; concurrent update conflict |
 | Website sync | Changed snapshot activates | Blocked host/private IP, timeout, redirect escape, partial crawl keeps prior snapshot |
-| Ask | Grounded answer opens correct citation | Insufficient evidence, provider timeout, invalid model response, citation mismatch |
+| Ask | Grounded answer opens correct citation in English, Chinese, and Malay | Insufficient evidence, provider timeout, invalid model response, citation mismatch |
 | Provider switch | Ollama changes to GLM without re-indexing | Invalid key/model, rejected consent, GLM unavailable, no silent hosted fallback |
 | Permissions | Grant enables access and revocation removes it | Direct URL/API/retrieval attempts remain denied |
 | Deletion | Owner deletes and verification reaches zero | Non-owner attempt, partial object failure, retry resumes safely, affected answer redaction |
@@ -105,13 +115,15 @@ format/lint
 → unit/component tests with coverage
 → integration/security tests with coverage
 → production build
-→ Playwright E2E happy and unhappy paths
+→ Playwright E2E smoke projects (make check) or complete matrix (make check-release)
 → RAG evaluation thresholds
-→ dependency/container security scans
-→ package or deploy
+→ dependency licence, dependency, and container security scans
+→ package or deploy (make check-release revisions only)
 ```
 
-All gates run locally through `make check` and in CI on every pull request and main-branch change. Release packaging depends on the same immutable revision that passed the gates. A deployment must provide a documented rollback to the last verified revision.
+All gates run locally through `make check` and in CI on every pull request and main-branch change. The complete Playwright matrix runs nightly and in `make check-release`. Release packaging depends on the same immutable revision that passed `make check-release`. A deployment must provide a documented rollback to the last verified revision.
+
+CI runs the Linux suite on every change and runs `make doctor` plus install smoke tests on Windows 11, macOS (Apple Silicon), and Ubuntu runners nightly and before release.
 
 The initial blocking RAG evaluation profile is measured on the versioned Phase 0 truth set:
 
@@ -123,7 +135,18 @@ The initial blocking RAG evaluation profile is measured on the versioned Phase 0
 - insufficient-evidence recall: at least 85%; and
 - stale or unauthorized retrieval leakage: exactly zero.
 
-Phase 0 must create enough positive, negative, ambiguous, stale-version, and permission-denied examples to calculate every metric before Phase 1 release packaging. Thresholds may only increase after approval; a temporary reduction blocks production packaging and requires a documented product decision.
+Phase 0 must create enough positive, negative, ambiguous, stale-version, and permission-denied examples to calculate every metric before Phase 1 release packaging. Every case class includes English, Simplified Chinese (`zh-Hans`), Traditional Chinese (`zh-Hant`), Malay, and mixed-language examples, and each of these strata must meet the thresholds independently; an aggregate Chinese score may not hide a failing script. Thresholds may only increase after approval; a temporary reduction blocks production packaging and requires a documented product decision.
+
+How each metric is measured:
+
+| Metric | Measurement | Cadence |
+|---|---|---|
+| Recall@10, MRR@10, leakage, insufficient-evidence precision/recall | Computed by code against labelled expected passages | Every `make test-evaluation` |
+| Citation correctness | Computed by code: cited IDs belong to supplied evidence and the cited span supports the quoted claim | Every `make test-evaluation` |
+| Grounded-answer acceptance | Recorded provider responses are replayed through the current end-to-end answer pipeline (retrieval, prompt, citation validation) and compared with human-labelled judgments; an optional local LLM judge is advisory only. Recorded sets are bound to a digest of the prompt, answer pipeline, and model profile, so a relevant change invalidates them and requires re-recording and re-labelling | Every `make test-evaluation` |
+| Live-model quality and latency | Fresh answers from a real Ollama/GLM profile with recorded model digest, seed, and parameters | Release gate per model profile |
+
+Synthetic fixtures form the initial truth set. Questions sourced from design partners (with permission, and stored outside the repository if confidential) are added as the customer-discovery track produces them.
 
 ## 8. Required commands
 
@@ -133,10 +156,12 @@ make test-api           # Backend unit/component suite
 make test-web           # Frontend unit/component suite
 make test-integration   # Database, queue, storage, parser, and API boundaries
 make test-security      # Isolation and abuse cases
-make test-e2e           # Playwright against the composed production build
+make test-e2e           # Playwright smoke projects against the composed production build
+make test-e2e-full      # Complete Playwright device matrix (nightly and release)
 make test-evaluation    # Versioned RAG quality dataset
 make coverage           # Enforce all 96% and critical-module 100% thresholds
-make check              # Complete blocking quality gate
+make check              # Pull-request quality gate
+make check-release      # make check plus complete E2E matrix; required for packaging
 ```
 
 Focused test commands must also exist so the red–green–refactor loop remains fast.
@@ -150,7 +175,9 @@ For each release, retain:
 - Playwright report;
 - RAG evaluation report;
 - dependency/container scan results;
-- supported hardware/model profile used for verification; and
+- supported hardware/model profile used for verification;
+- clean-machine install results for Windows 11, macOS (Apple Silicon), and Ubuntu LTS;
+- per-language evaluation results (English, Chinese, Malay); and
 - rollback target and instructions.
 
 A manual test may supplement this evidence but never replace a blocking automated gate.

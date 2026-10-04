@@ -13,10 +13,12 @@ Avoid cloud platform work, billing, and a wide connector catalog until pilots de
 - Interview 10–15 SMEs across promising segments.
 - Identify repeated questions, current search process, data sensitivity, and update frequency.
 - Select 3–5 design partners with accessible sample content.
-- Collect 50–100 representative questions with expected source evidence.
+- Collect 50–100 representative questions with expected source evidence, in the languages partners actually use.
 - Include positive, negative, ambiguous, stale-version, and permission-denied cases and calculate every blocking RAG evaluation metric.
 - Define unacceptable failure cases, especially privacy and obsolete answers.
-- Confirm target PC hardware and supported operating systems.
+- Validate the decided platforms (Windows 11, macOS Apple Silicon, Ubuntu LTS) and content languages (English, Chinese, Malay) against partner hardware and content; record any partner that falls outside them.
+
+This discovery work runs as a parallel, non-engineering track alongside engineering Phases 0–3 of the [implementation plan](../tasks/plan.md). It does not wait for the walking skeleton, and its findings feed the evaluation dataset and scope decisions.
 
 **Exit gate:** at least three partners agree to test using real knowledge, and the questions cluster around a repeatable problem.
 

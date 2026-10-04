@@ -25,7 +25,8 @@ The MVP targets general SMEs that:
 - rely on recurring internal, customer, product, policy, or operational questions;
 - maintain tens to thousands of documents rather than millions;
 - can nominate an owner who controls sources and access;
-- can run the application on a designated PC or small office server; and
+- can run the application on a designated Windows 11, macOS (Apple Silicon), or Ubuntu LTS PC or small office server;
+- work in English, Chinese, Malay, or a mix of these; and
 - accept a local installation before a managed cloud service exists.
 
 Strong early design-partner candidates include professional services, distributors, small manufacturers, property managers, and support teams.
@@ -54,8 +55,9 @@ The MVP supports one company workspace per installation. The data model should r
 ### 6.1 Workspace and access
 
 - Create the local workspace during first-run setup.
-- Create owner, administrator, and member accounts.
+- Create owner, administrator, and member accounts; invite members with single-use expiring invitations or temporary passwords.
 - Sign in using email/username and password.
+- Recover a lost owner password through an audited command on the host PC (no email service is required).
 - Assign sources to collections and grant users access to collections.
 - Enforce authorization in retrieval, not only in the user interface.
 
@@ -65,6 +67,7 @@ The MVP supports one company workspace per installation. The data model should r
 - Process uploads asynchronously so the interface remains responsive.
 - Extract text, headings, tables, page or sheet locations, and useful metadata where the source format permits.
 - Apply OCR to scanned pages and images.
+- Support English, Chinese (Simplified and Traditional), and Malay content, including mixed-language documents, for extraction, OCR, search, and citations.
 - Reject unsupported, corrupt, encrypted, or oversized files with an actionable reason.
 - Preserve the original file and a checksum for traceability and duplicate detection.
 
@@ -82,7 +85,7 @@ The MVP supports one company workspace per installation. The data model should r
 
 - Display every source, its type, owner, collection, active version, last successful update, and health.
 - Replace a document by uploading a new version.
-- Preserve immutable version history for a configurable rollback period.
+- Preserve immutable version history for a configurable rollback period, then purge expired versions automatically.
 - Activate a new version only after all processing and validation succeeds.
 - Roll back to a retained prior version.
 - Let administrators archive a source and owners permanently delete it.
@@ -93,12 +96,14 @@ The MVP supports one company workspace per installation. The data model should r
 - Accept a natural-language question.
 - Optionally filter by collection or source.
 - Use hybrid semantic and keyword retrieval.
-- Rerank candidate passages before generating an answer.
+- Merge and rank candidate passages (reciprocal-rank fusion for the MVP) before generating an answer.
 - Generate a concise answer from retrieved evidence only.
 - Cite the document/page/section, spreadsheet/sheet/cell range, or webpage URL where available.
 - Let the user open the cited passage in context.
 - Say that the indexed evidence is insufficient when the retrieval confidence is below the configured threshold.
 - Support follow-up questions within a conversation while preventing conversation history from overriding source evidence.
+- List, reopen, and delete past conversations; expired conversations are purged by retention policy.
+- Answer in the language of the question.
 
 ### 6.6 AI provider configuration
 
@@ -165,7 +170,7 @@ The MVP supports one company workspace per installation. The data model should r
 
 - Recruit 3–5 design-partner SMEs.
 - Each partner indexes real working knowledge and uses the product weekly.
-- At least 70% of a curated question set produces an acceptable cited answer in the first pilot; targets rise as the evaluation set matures.
+- At least 70% of a curated question set produces an acceptable cited answer in the first pilot on partner data; targets rise as the evaluation set matures. (This is separate from the 95% grounded-answer gate on the versioned Phase 0 truth set, which measures system behavior rather than partner-data coverage.)
 - Users report measurable time saved on a recurring knowledge task.
 - At least two partners indicate willingness to pay for continued use, support, or a managed edition.
 
