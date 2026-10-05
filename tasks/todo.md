@@ -38,10 +38,17 @@ These are master work packages. Before implementation, any package larger than o
 
 ## Phase 2 — Identity and catalog
 
-- [ ] **Task 6: Implement owner setup, sign-in, and secure sessions**
+- [ ] **Task 6: Implement owner setup, sign-in, and secure sessions** (expanded into child tasks 6a–6f)
   - Acceptance: first-run wizard verifies database, Redis, storage, and Ollama; first owner can initialize/sign in; invitation-token and temporary-password primitives (with forced password change) exist for Task 7 to manage; sign-in failures are throttled; `make reset-owner-password` recovers owner access on the host with an audit event; failures are actionable and resumable.
   - Verify: API tests plus Playwright success/unavailable-database/unwritable-storage/missing-model/invitation scenarios on three device classes; integration test for host-local owner recovery.
   - Dependencies: Task 5.
+  - Child tasks (interfaces and acceptance criteria preserved from the master package):
+    - [x] **6a: Identity schema and first-owner primitive** — Alembic migration for `workspaces`/`users`/`sessions`/`invitations`; Argon2id password hashing; `create_first_owner` with first-owner exclusivity (refuses when any user exists), workspace row, and transactional `workspace.initialized` audit event via `EventWriter`. Verify: `tests/integration/identity_access/test_first_owner.py` covers success, exclusivity, rollback atomicity.
+    - [ ] **6b: Authentication, throttling, and sessions** — `authenticate` (Argon2id verify, wrong-password failure), per-user sign-in failure throttling with lockout, session issue/`require_session` with expiry and revocation, secure cookie attributes. Verify: focused unit/integration auth tests cover wrong password, lockout, expired/revoked session.
+    - [ ] **6c: Setup and session API routes** — `check_setup_dependencies` (database, Redis, storage, Ollama — actionable, resumable), resumable `initialize_workspace`, `POST /api/setup/owner`, `/api/session` login/logout/me, secure cookies + Origin check on mutations, actionable failure payloads. Verify: `tests/api/test_setup_routes.py` success/unavailable-dependency/resume/second-owner-refused.
+    - [ ] **6d: Invitation and temporary-password primitives** — `issue_invitation_token`, `accept_invitation` (expired/reused/revoked refused), `require_password_change`, `POST /api/invitations/accept`, forced password change on temporary passwords. Verify: API tests cover accept/expired/reused/revoked/forced-change flows.
+    - [ ] **6e: Host-local owner recovery** — `reset_owner_password` in `infra/scripts/reset_owner_password.py`, `make reset-owner-password`; revokes sessions, writes audit event, preserves data, refuses non-owning OS accounts and password arguments/env vars, never logs the password. Verify: `tests/integration/identity_access/test_owner_recovery.py`.
+    - [ ] **6f: Setup/sign-in web pages and first-run E2E** — `apps/web/src/features/auth/SetupPage.tsx` + sign-in page with actionable/resumable states; Playwright `e2e/first-run.spec.ts` success/unavailable-database/unwritable-storage/missing-model scenarios at mobile/tablet/desktop. Verify: full first-run Playwright matrix passes.
 - [ ] **Task 7: Implement users, roles, collections, and grants**
   - Acceptance: owner/admin/member permissions are enforced in services/queries; owners/admins invite users with role and collections, revoke invitations, reset passwords per role rules, and disable users; access changes emit transactional audit events.
   - Verify: security tests prove cross-collection and direct-ID denial.
