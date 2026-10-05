@@ -418,3 +418,47 @@ def test_reset_password_unknown_target_raises_target_not_found(db, workspace) ->
 
     with pytest.raises(TargetNotFound):
         _run(db, run)
+
+
+def test_revoke_invitation_unknown_or_foreign_raises_target_not_found(db, workspace) -> None:
+    from identity_access.grants import revoke_invitation as revoke
+
+    async def seed_foreign(uow) -> str:
+        invitation_id = str(uuid.uuid4())
+        workspace_id = str(uuid.uuid4())
+        async with uow.transaction() as transaction:
+            await transaction.execute(
+                text("INSERT INTO workspaces (id, name) VALUES (:id, 'Foreign')"),
+                {"id": workspace_id},
+            )
+            await transaction.execute(
+                text(
+                    "INSERT INTO invitations (id, workspace_id, email, role, token_hash, "
+                    "status, expires_at) VALUES (:id, :workspace_id, 'f@example.com', "
+                    "'member', 'hash', 'pending', now() + interval '1 day')"
+                ),
+                {"id": invitation_id, "workspace_id": workspace_id},
+            )
+        return invitation_id
+
+    # The foreign invitation needs a real workspace row; insert one and use its id.
+    async def run_unknown(uow) -> None:
+        await revoke(
+            uow, EventWriter(),
+            context=_context(workspace, "owner_id", "owner"),
+            invitation_id=str(uuid.uuid4()),
+        )
+
+    with pytest.raises(TargetNotFound):
+        _run(db, run_unknown)
+
+    async def seed_and_revoke(uow) -> None:
+        invitation_id = await seed_foreign(uow)
+        await revoke(
+            uow, EventWriter(),
+            context=_context(workspace, "owner_id", "owner"),
+            invitation_id=invitation_id,
+        )
+
+    with pytest.raises(TargetNotFound):
+        _run(db, seed_and_revoke)

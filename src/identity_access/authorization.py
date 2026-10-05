@@ -88,7 +88,10 @@ async def accessible_collection_ids(
     async with uow.transaction() as transaction:
         role = (
             await transaction.execute(
-                text("SELECT role FROM users WHERE id = :id AND workspace_id = :ws"),
+                text(
+                    "SELECT role FROM users "
+                    "WHERE id = :id AND workspace_id = :ws AND status = 'active'"
+                ),
                 {"id": user_id, "ws": workspace_id},
             )
         ).scalar_one_or_none()
