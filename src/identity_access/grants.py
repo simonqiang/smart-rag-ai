@@ -100,7 +100,9 @@ async def revoke_invitation(
                 {"id": invitation_id},
             )
         ).scalar_one_or_none()
-        if row is None or str(row) != context.workspace_id:
+        if row is None:
+            raise TargetNotFound(invitation_id)
+        if str(row) != context.workspace_id:
             raise TargetNotFound(invitation_id)
     authorize("invitation.revoke", ProtectedResource(context.workspace_id), context)
     return await invitations.revoke_invitation(

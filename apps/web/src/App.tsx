@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import SetupPage from "./features/auth/SetupPage";
 import SignInPage from "./features/auth/SignInPage";
+import UserAccessPage from "./features/settings/UserAccessPage";
 
 function usePath(): string {
   const [path, setPath] = useState(window.location.pathname);
@@ -22,6 +23,7 @@ function App() {
   const path = usePath();
   if (path === "/setup") return <SetupPage />;
   if (path === "/signin") return <SignInPage />;
+  if (path === "/users") return <UserAccessPage />;
   return (
     <main>
       <h1>Smart RAG AI</h1>

@@ -32,6 +32,22 @@ export async function postJson(url: string, body: unknown): Promise<ApiResult> {
   return { ok: response.ok, status: response.status, payload };
 }
 
+export async function putJson(url: string, body: unknown): Promise<ApiResult> {
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  return { ok: response.ok, status: response.status, payload };
+}
+
+export async function deleteJson(url: string): Promise<ApiResult> {
+  const response = await fetch(url, { method: "DELETE" });
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  return { ok: response.ok, status: response.status, payload };
+}
+
 export function detailText(result: ApiResult): string {
   const detail = result.payload.detail;
   if (typeof detail === "string") return detail;
