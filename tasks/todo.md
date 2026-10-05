@@ -38,7 +38,7 @@ These are master work packages. Before implementation, any package larger than o
 
 ## Phase 2 — Identity and catalog
 
-- [ ] **Task 6: Implement owner setup, sign-in, and secure sessions** (expanded into child tasks 6a–6f)
+- [x] **Task 6: Implement owner setup, sign-in, and secure sessions** (expanded into child tasks 6a–6f; all complete)
   - Acceptance: first-run wizard verifies database, Redis, storage, and Ollama; first owner can initialize/sign in; invitation-token and temporary-password primitives (with forced password change) exist for Task 7 to manage; sign-in failures are throttled; `make reset-owner-password` recovers owner access on the host with an audit event; failures are actionable and resumable.
   - Verify: API tests plus Playwright success/unavailable-database/unwritable-storage/missing-model/invitation scenarios on three device classes; integration test for host-local owner recovery.
   - Dependencies: Task 5.
