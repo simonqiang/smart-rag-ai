@@ -23,7 +23,10 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 from apps.api.routes import auth as auth_routes
+from apps.api.routes import users as user_routes
 from foundation.config import Settings
+from identity_access.authorization import AccessDenied
+from identity_access.grants import TargetNotFound
 
 correlation_id: ContextVar[str] = ContextVar("correlation_id", default="-")
 
@@ -119,6 +122,19 @@ async def _lifespan(_app: FastAPI):
 
 app = FastAPI(title="Smart RAG AI", lifespan=_lifespan)
 app.include_router(auth_routes.router)
+app.include_router(user_routes.router)
+
+
+@app.exception_handler(TargetNotFound)
+async def _target_not_found(_request: Request, _exc: TargetNotFound) -> JSONResponse:
+    # Unknown and cross-workspace targets are indistinguishable by design:
+    # object IDs must not be probeable.
+    return JSONResponse(status_code=404, content={"detail": "no such user"})
+
+
+@app.exception_handler(AccessDenied)
+async def _access_denied(_request: Request, _exc: AccessDenied) -> JSONResponse:
+    return JSONResponse(status_code=403, content={"detail": "not allowed"})
 
 
 @app.middleware("http")
