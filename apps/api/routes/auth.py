@@ -30,6 +30,11 @@ from identity_access.auth import (
     require_session,
     revoke_session,
 )
+from identity_access.invitations import (
+    InvitationInvalid,
+    accept_invitation,
+    change_password,
+)
 from identity_access.setup import (
     SetupReadiness,
     WorkspaceAlreadyInitialized,
@@ -176,4 +181,54 @@ async def sign_out(
     user: Annotated[AuthenticatedUser, Depends(current_user)],
 ) -> None:
     await revoke_session(uow(), request.cookies[SESSION_COOKIE])
+    response.delete_cookie(SESSION_COOKIE, path="/")
+
+
+class AcceptInvitationRequest(BaseModel):
+    token: str
+    password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/invitations/accept", status_code=201)
+async def accept_invitation_route(
+    request: Request, response: Response, body: AcceptInvitationRequest
+) -> dict:
+    _check_origin(request)
+    try:
+        accepted = await accept_invitation(
+            uow(), EventWriter(), token=body.token, password=body.password
+        )
+    except InvitationInvalid:
+        raise HTTPException(
+            status_code=400,
+            detail="invitation is invalid, expired, or already used",
+        ) from None
+    session = await authenticate(uow(), EventWriter(), accepted.email, body.password)
+    _set_session_cookie(request, response, session.token)
+    return {"user_id": session.user_id, "workspace_id": accepted.workspace_id}
+
+
+@router.post("/session/password", status_code=204)
+async def change_password_route(
+    request: Request,
+    response: Response,
+    body: ChangePasswordRequest,
+    user: Annotated[AuthenticatedUser, Depends(current_user)],
+) -> None:
+    _check_origin(request)
+    changed = await change_password(
+        uow(),
+        EventWriter(),
+        user_id=user.user_id,
+        current_password=body.current_password,
+        new_password=body.new_password,
+    )
+    if not changed:
+        raise HTTPException(status_code=403, detail="current password is incorrect")
+    # Password rotation revokes all sessions; drop this one from the browser.
     response.delete_cookie(SESSION_COOKIE, path="/")

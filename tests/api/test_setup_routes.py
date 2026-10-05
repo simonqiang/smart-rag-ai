@@ -1,8 +1,10 @@
 """Task 6c: setup and session API routes against the live Compose stack."""
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -10,6 +12,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from apps.api import main as api
 from apps.api.routes import auth as auth_routes
 from foundation.config import Settings
+from identity_access.auth import SessionInvalid
 from identity_access.setup import DependencyCheck, SetupReadiness
 
 OWNER = {"email": "owner@example.com", "password": "owner-password-1"}
@@ -177,3 +180,18 @@ def test_cross_origin_mutation_refused() -> None:
         )
 
     assert response.status_code == 403
+
+
+def test_current_user_maps_session_invalid_to_401(monkeypatch) -> None:
+    """Direct call: portal-thread runs are invisible to coverage tracing."""
+
+    async def require_session(uow: object, token: str, **_: object) -> object:
+        raise SessionInvalid()
+
+    monkeypatch.setattr(auth_routes, "require_session", require_session)
+    request = SimpleNamespace(cookies={auth_routes.SESSION_COOKIE: "stale-token"})
+
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(auth_routes.current_user(request))  # type: ignore[arg-type]
+
+    assert excinfo.value.status_code == 401
