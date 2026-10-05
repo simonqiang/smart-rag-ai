@@ -34,20 +34,37 @@ def _readiness(ok: bool) -> SetupReadiness:
     )
 
 
-def test_all_passing_checks_report_ok(settings: Settings) -> None:
+def _probe(ok: bool, detail: str):
     async def probe(s: Settings) -> tuple[bool, str]:
-        return True, "fine"
+        return ok, detail
 
-    readiness = asyncio.run(check_setup_dependencies(settings, probe_database=probe))
+    return probe
+
+
+def test_all_passing_checks_report_ok(settings: Settings) -> None:
+    readiness = asyncio.run(
+        check_setup_dependencies(
+            settings,
+            probe_database=_probe(True, "fine"),
+            probe_redis=_probe(True, "fine"),
+            probe_storage=_probe(True, "fine"),
+            probe_ollama=_probe(True, "fine"),
+        )
+    )
     assert readiness.ok is True
     assert readiness.failures() == []
 
 
 def test_failing_check_is_listed_with_remediation(settings: Settings) -> None:
-    async def probe(s: Settings) -> tuple[bool, str]:
-        return False, "ConnectionRefusedError"
-
-    readiness = asyncio.run(check_setup_dependencies(settings, probe_database=probe))
+    readiness = asyncio.run(
+        check_setup_dependencies(
+            settings,
+            probe_database=_probe(False, "ConnectionRefusedError"),
+            probe_redis=_probe(True, "fine"),
+            probe_storage=_probe(True, "fine"),
+            probe_ollama=_probe(True, "fine"),
+        )
+    )
     assert readiness.ok is False
     assert readiness.failures() == [
         DependencyCheck(
