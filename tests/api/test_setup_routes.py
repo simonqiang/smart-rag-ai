@@ -18,6 +18,27 @@ from identity_access.setup import DependencyCheck, SetupReadiness
 OWNER = {"email": "owner@example.com", "password": "owner-password-1"}
 
 
+def _all_passing() -> SetupReadiness:
+    return SetupReadiness(
+        checks=[
+            DependencyCheck("database", True, "reachable"),
+            DependencyCheck("redis", True, "reachable"),
+            DependencyCheck("storage", True, "writable"),
+            DependencyCheck("ollama", True, "qwen3:8b + bge-m3 available"),
+        ]
+    )
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_readiness(monkeypatch):
+    """Routes see passing dependency checks: real probes vary by environment."""
+
+    async def fake_readiness() -> SetupReadiness:
+        return _all_passing()
+
+    monkeypatch.setattr(auth_routes, "readiness", fake_readiness)
+
+
 @pytest.fixture(scope="module", autouse=True)
 def _migrated():
     from pathlib import Path
