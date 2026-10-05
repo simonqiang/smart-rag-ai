@@ -22,6 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
+from apps.api.routes import auth as auth_routes
 from foundation.config import Settings
 
 correlation_id: ContextVar[str] = ContextVar("correlation_id", default="-")
@@ -117,6 +118,7 @@ async def _lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Smart RAG AI", lifespan=_lifespan)
+app.include_router(auth_routes.router)
 
 
 @app.middleware("http")
