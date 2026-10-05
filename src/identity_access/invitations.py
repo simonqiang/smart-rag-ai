@@ -222,6 +222,43 @@ async def set_temporary_password(
         )
 
 
+async def reset_user_password(
+    uow: UnitOfWork,
+    writer: EventWriter,
+    *,
+    user_id: str,
+    new_password: str,
+    actor: str,
+) -> None:
+    """Set a new password, force a change at next sign-in, revoke all sessions.
+
+    Single transaction so recovery can never leave a half-reset account with
+    live sessions. Host recovery (Task 6e) and admin resets (Task 7) share it.
+    """
+    async with uow.transaction() as transaction:
+        result = await transaction.execute(
+            text(
+                "UPDATE users SET password_hash = :password_hash, "
+                "must_change_password = true, failed_attempts = 0, locked_until = NULL, "
+                "updated_at = now() WHERE id = :id"
+            ),
+            {"password_hash": hash_password(new_password), "id": user_id},
+        )
+        if result.rowcount == 0:
+            raise ValueError(f"no such user: {user_id}")
+        await transaction.execute(
+            text(
+                "UPDATE sessions SET revoked_at = now() "
+                "WHERE user_id = :id AND revoked_at IS NULL"
+            ),
+            {"id": user_id},
+        )
+        await writer.record(
+            AuditEvent(type="user.password_reset", actor=actor, subject=user_id),
+            transaction,
+        )
+
+
 async def change_password(
     uow: UnitOfWork,
     writer: EventWriter,
