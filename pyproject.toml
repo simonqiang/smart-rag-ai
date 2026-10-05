@@ -12,6 +12,7 @@ dependencies = [
     "redis>=5.2",
     "dramatiq[redis]>=1.17",
     "alembic>=1.14",
+    "argon2-cffi>=25.1.0",
 ]
 
 [dependency-groups]

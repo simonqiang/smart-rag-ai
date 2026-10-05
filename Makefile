@@ -26,6 +26,9 @@ migrate:
 doctor:
 	PYTHONPATH=src $(PYTHON) -m foundation.doctor
 
+reset-owner-password:
+	$(PYTHON) infra/scripts/reset_owner_password.py
+
 test-doctor:
 	$(PYTEST) tests/unit/foundation -v
 
