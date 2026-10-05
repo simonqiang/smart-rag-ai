@@ -118,9 +118,11 @@ def _stratum_report(stratum: str, pairs: list[tuple[EvaluationCase, EvaluationRe
 
     leakage_count = 0
     for c, r in pairs:
-        if c.case_class in ("stale_version", "unauthorized"):
-            if set(c.forbidden_passage_ids) & set(r.ranked_passage_ids[:TOP_K]):
-                leakage_count += 1
+        if (
+            c.case_class in ("stale_version", "unauthorized")
+            and set(c.forbidden_passage_ids) & set(r.ranked_passage_ids[:TOP_K])
+        ):
+            leakage_count += 1
 
     report = StratumReport(
         stratum=stratum,

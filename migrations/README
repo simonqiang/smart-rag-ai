@@ -1,0 +1,2 @@
+Schema migrations for Smart RAG AI. Apply with `make migrate`.
+Generic env; database URL comes from SMART_RAG_DATABASE_URL.
