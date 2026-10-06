@@ -24,6 +24,7 @@ from sqlalchemy.pool import NullPool
 
 from apps.api.routes import auth as auth_routes
 from apps.api.routes import sources as source_routes
+from apps.api.routes import uploads as upload_routes
 from apps.api.routes import users as user_routes
 from foundation.config import Settings
 from identity_access.authorization import AccessDenied
@@ -126,6 +127,7 @@ app = FastAPI(title="Smart RAG AI", lifespan=_lifespan)
 app.include_router(auth_routes.router)
 app.include_router(user_routes.router)
 app.include_router(source_routes.router)
+app.include_router(upload_routes.router)
 
 
 @app.exception_handler(TargetNotFound)
