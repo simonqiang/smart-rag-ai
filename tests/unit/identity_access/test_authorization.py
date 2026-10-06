@@ -69,16 +69,13 @@ def test_unknown_action_is_rejected() -> None:
         authorize("user.nuke", ProtectedResource("ws-1"), _context("owner"))
 
 
-def test_wildcard_collections_mean_unrestricted() -> None:
-    assert can_access_collection(_context("owner"), "any-collection") is True
-    assert can_access_collection(_context("admin"), "any-collection") is True
-
-
-def test_scoped_collections_limit_member_access() -> None:
+def test_collection_access_is_grant_list_membership() -> None:
+    # Owner/admin contexts carry their enumerated workspace collections;
+    # members carry grants. Either way the check is membership.
     scoped = AccessContext(
         user_id="u-1", workspace_id="ws-1", role="member", collection_ids=["col-a"]
     )
     assert can_access_collection(scoped, "col-a") is True
     assert can_access_collection(scoped, "col-b") is False
-    empty = AccessContext(user_id="u-1", workspace_id="ws-1", role="member", collection_ids=[])
+    empty = AccessContext(user_id="u-1", workspace_id="ws-1", role="owner")
     assert can_access_collection(empty, "col-a") is False

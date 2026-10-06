@@ -200,14 +200,27 @@ def test_set_user_collections_cross_workspace_target_is_not_found(db, workspace)
 
 
 def test_accessible_collection_ids_by_role(db, workspace) -> None:
-    async def seed(uow) -> None:
+    async def seed(uow) -> tuple[str, str]:
+        owner = _context(workspace, "owner_id", "owner")
         await set_user_collections(
-            uow, EventWriter(),
-            context=_context(workspace, "owner_id", "owner"),
+            uow, EventWriter(), context=owner,
             target_user_id=workspace["member_id"], collections=["col-a", "col-b"],
         )
+        # Enumeration for owner/admin requires real collection rows.
+        first = str(uuid.uuid4())
+        second = str(uuid.uuid4())
+        async with uow.transaction() as transaction:
+            for collection_id, name in ((first, "Alpha"), (second, "Beta")):
+                await transaction.execute(
+                    text(
+                        "INSERT INTO collections (id, workspace_id, name) "
+                        "VALUES (:id, :workspace_id, :name)"
+                    ),
+                    {"id": collection_id, "workspace_id": workspace["workspace_id"], "name": name},
+                )
+        return first, second
 
-    _run(db, seed)
+    first, second = _run(db, seed)
 
     async def access(uow, *, user_id: str) -> object:
         from identity_access.authorization import accessible_collection_ids
@@ -216,9 +229,20 @@ def test_accessible_collection_ids_by_role(db, workspace) -> None:
             uow, user_id=user_id, workspace_id=workspace["workspace_id"]
         )
 
-    assert _run(db, lambda uow: access(uow, user_id=workspace["owner_id"])) is None
-    assert _run(db, lambda uow: access(uow, user_id=workspace["admin_id"])) is None
-    assert _run(db, lambda uow: access(uow, user_id=workspace["member_id"])) == ["col-a", "col-b"]
+    # Owner/admin enumerate every workspace collection (name order);
+    # members get exactly their grants.
+    assert _run(db, lambda uow: access(uow, user_id=workspace["owner_id"])) == [
+        first,
+        second,
+    ]
+    assert _run(db, lambda uow: access(uow, user_id=workspace["admin_id"])) == [
+        first,
+        second,
+    ]
+    assert _run(db, lambda uow: access(uow, user_id=workspace["member_id"])) == [
+        "col-a",
+        "col-b",
+    ]
 
 
 def test_member_without_grants_has_empty_access(db, workspace) -> None:

@@ -12,7 +12,7 @@ be probed.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import text
 
@@ -28,6 +28,8 @@ MINIMUM_ROLE = {
     "user.reset_password": "admin",
     "user.disable": "admin",
     "invitation.revoke": "admin",
+    "collection.create": "admin",
+    "source.create": "admin",
 }
 
 # Actions that may never target the actor themselves.
@@ -43,7 +45,7 @@ class AccessContext:
     user_id: str
     workspace_id: str
     role: str
-    collection_ids: list[str] | None = None  # None = unrestricted (owner/admin)
+    collection_ids: list[str] = field(default_factory=list)  # permitted collection IDs
 
 
 @dataclass(frozen=True)
@@ -73,17 +75,14 @@ def authorize(action: str, resource: ProtectedResource, context: AccessContext) 
 
 
 def can_access_collection(context: AccessContext, collection_id: str) -> bool:
-    if context.collection_ids is None:
-        return True
     return collection_id in context.collection_ids
 
 
 async def accessible_collection_ids(
     uow: UnitOfWork, *, user_id: str, workspace_id: str
-) -> list[str] | None:
-    """Grant-scoped collection IDs, or None when the role is unrestricted.
-
-    Unknown users resolve to no access, never a wildcard.
+) -> list[str]:
+    """Permitted collection IDs: grants for members, every workspace
+    collection for owner/admin. Unknown or disabled users get no access.
     """
     async with uow.transaction() as transaction:
         role = (
@@ -98,7 +97,16 @@ async def accessible_collection_ids(
         if role is None or str(role) not in ROLES:
             return []
         if str(role) != "member":
-            return None  # ponytail: wildcard until a collections table exists (Task 8) to enumerate
+            rows = (
+                await transaction.execute(
+                    text(
+                        "SELECT id FROM collections WHERE workspace_id = :ws "
+                        "ORDER BY name"
+                    ),
+                    {"ws": workspace_id},
+                )
+            ).scalars().all()
+            return [str(row) for row in rows]
         rows = (
             await transaction.execute(
                 text(
@@ -108,4 +116,4 @@ async def accessible_collection_ids(
                 {"id": user_id},
             )
         ).scalars().all()
-        return list(rows)
+        return [str(row) for row in rows]
