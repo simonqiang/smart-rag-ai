@@ -9,8 +9,10 @@ password and revokes existing sessions so new credentials take everywhere.
 
 from __future__ import annotations
 
+import json
 import secrets
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -44,6 +46,7 @@ class AcceptedInvitation:
     email: str
     role: str
     must_change_password: bool
+    collections: list[str]
 
 
 def require_password_change(user: object) -> bool:
@@ -59,6 +62,7 @@ async def issue_invitation_token(
     email: str,
     role: str,
     invited_by: str,
+    collections: Sequence[str] = (),
     ttl: timedelta = timedelta(hours=INVITATION_TTL_HOURS),
     now: datetime | None = None,
 ) -> IssuedInvitation:
@@ -70,9 +74,9 @@ async def issue_invitation_token(
         await transaction.execute(
             text(
                 "INSERT INTO invitations (id, workspace_id, email, role, token_hash, "
-                "status, invited_by, expires_at) "
+                "status, invited_by, expires_at, collections) "
                 "VALUES (:id, :workspace_id, :email, :role, :token_hash, 'pending', "
-                ":invited_by, :expires_at)"
+                ":invited_by, :expires_at, :collections)"
             ),
             {
                 "id": invitation_id,
@@ -82,6 +86,7 @@ async def issue_invitation_token(
                 "token_hash": token_hash(token),
                 "invited_by": invited_by,
                 "expires_at": expires_at,
+                "collections": json.dumps(sorted(set(collections))),
             },
         )
         await writer.record(
@@ -120,7 +125,7 @@ async def _accept_in_transaction(
         (
             await transaction.execute(
                 text(
-                    "SELECT id, workspace_id, email, role, status, expires_at "
+                    "SELECT id, workspace_id, email, role, status, expires_at, collections "
                     "FROM invitations WHERE token_hash = :token_hash"
                 ),
                 {"token_hash": token_hash(token)},
@@ -164,6 +169,20 @@ async def _accept_in_transaction(
         ),
         {"accepted_at": now, "id": invitation["id"]},
     )
+    collections = json.loads(invitation["collections"] or "[]")
+    for collection_id in collections:
+        await transaction.execute(
+            text(
+                "INSERT INTO collection_grants (id, workspace_id, user_id, collection_id) "
+                "VALUES (:id, :workspace_id, :user_id, :collection_id)"
+            ),
+            {
+                "id": str(uuid.uuid4()),
+                "workspace_id": invitation["workspace_id"],
+                "user_id": user_id,
+                "collection_id": collection_id,
+            },
+        )
     await writer.record(
         AuditEvent(
             type="invitation.accepted",
@@ -178,6 +197,7 @@ async def _accept_in_transaction(
         email=str(invitation["email"]),
         role=str(invitation["role"]),
         must_change_password=False,
+        collections=list(collections),
     )
 
 
