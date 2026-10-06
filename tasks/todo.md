@@ -70,7 +70,7 @@ These are master work packages. Before implementation, any package larger than o
 
 ## Phase 3 — First RAG slice
 
-- [ ] **Task 9: Register uploads and store original files safely** (expanded into child tasks 9a–9c)
+- [x] **Task 9: Register uploads and store original files safely** (expanded into child tasks 9a–9c; all complete)
   - Acceptance: checksum, size/type validation, manifest, and duplicate warning work.
   - Verify: upload integration tests cover valid, corrupt, encrypted, oversized, and duplicate inputs.
   - Dependencies: Task 8.
