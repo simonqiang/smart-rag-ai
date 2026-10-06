@@ -23,10 +23,12 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 from apps.api.routes import auth as auth_routes
+from apps.api.routes import sources as source_routes
 from apps.api.routes import users as user_routes
 from foundation.config import Settings
 from identity_access.authorization import AccessDenied
 from identity_access.grants import TargetNotFound
+from source_catalog.catalog import CollectionNotFound, SourceNotFound
 
 correlation_id: ContextVar[str] = ContextVar("correlation_id", default="-")
 
@@ -123,6 +125,7 @@ async def _lifespan(_app: FastAPI):
 app = FastAPI(title="Smart RAG AI", lifespan=_lifespan)
 app.include_router(auth_routes.router)
 app.include_router(user_routes.router)
+app.include_router(source_routes.router)
 
 
 @app.exception_handler(TargetNotFound)
@@ -130,6 +133,18 @@ async def _target_not_found(_request: Request, _exc: TargetNotFound) -> JSONResp
     # Unknown and cross-workspace targets are indistinguishable by design:
     # object IDs must not be probeable.
     return JSONResponse(status_code=404, content={"detail": "no such user"})
+
+
+@app.exception_handler(SourceNotFound)
+async def _source_not_found(_request: Request, _exc: SourceNotFound) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": "no such source"})
+
+
+@app.exception_handler(CollectionNotFound)
+async def _collection_not_found(
+    _request: Request, _exc: CollectionNotFound
+) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": "no such collection"})
 
 
 @app.exception_handler(AccessDenied)
