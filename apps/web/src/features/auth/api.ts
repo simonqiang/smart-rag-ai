@@ -48,6 +48,12 @@ export async function deleteJson(url: string): Promise<ApiResult> {
   return { ok: response.ok, status: response.status, payload };
 }
 
+export async function postForm(url: string, body: FormData): Promise<ApiResult> {
+  const response = await fetch(url, { method: "POST", body });
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  return { ok: response.ok, status: response.status, payload };
+}
+
 export function detailText(result: ApiResult): string {
   const detail = result.payload.detail;
   if (typeof detail === "string") return detail;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import UploadSource from "./UploadSource";
 import { detailText, getJson } from "../auth/api";
 
 type Source = {
@@ -20,6 +21,7 @@ const rowStyle = {
 export default function SourceListPage() {
   const [sources, setSources] = useState<Source[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [canUpload, setCanUpload] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -34,6 +36,12 @@ export default function SourceListPage() {
 
   useEffect(() => {
     void load();
+    void getJson("/api/session").then((me) => {
+      if (me.ok) {
+        const role = String(me.payload.role);
+        setCanUpload(role === "owner" || role === "admin");
+      }
+    });
   }, [load]);
 
   return (
@@ -48,9 +56,13 @@ export default function SourceListPage() {
         </p>
       )}
       {sources === null && !error && <p role="status">Loading sources…</p>}
-      {sources !== null && sources.length === 0 && (
+      {sources !== null && sources.length === 0 && !canUpload && (
         <p>No sources yet. An administrator can add the first source.</p>
       )}
+      {sources !== null && sources.length === 0 && canUpload && (
+        <p>No sources yet. Upload the first one below.</p>
+      )}
+      {canUpload && <UploadSource />}
       {sources !== null && sources.length > 0 && (
         <ul style={listStyle}>
           {sources.map((source) => (
