@@ -230,25 +230,22 @@ def test_unknown_and_foreign_target_404_identical_over_api(db, workspace) -> Non
     async def seed() -> None:
         from identity_access.passwords import hash_password
 
-        async def run() -> None:
-            engine = create_async_engine(Settings.load().database_url)
-            async with engine.begin() as connection:
-                await connection.execute(
-                    text("INSERT INTO workspaces (id, name) VALUES (:id, 'Foreign 2')"),
-                    {"id": foreign_workspace},
-                )
-                await connection.execute(
-                    text(
-                        "INSERT INTO users (id, workspace_id, email, password_hash, role) "
-                        "VALUES (:id, :workspace_id, 'foreign2@example.com', :hash, 'owner')"
-                    ),
-                    {"id": foreign_user, "workspace_id": foreign_workspace, "hash": hash_password("foreign-pass-1")},
-                )
-            await engine.dispose()
+        engine = create_async_engine(Settings.load().database_url)
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("INSERT INTO workspaces (id, name) VALUES (:id, 'Foreign 2')"),
+                {"id": foreign_workspace},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, workspace_id, email, password_hash, role) "
+                    "VALUES (:id, :workspace_id, 'foreign2@example.com', :hash, 'owner')"
+                ),
+                {"id": foreign_user, "workspace_id": foreign_workspace, "hash": hash_password("foreign-pass-1")},
+            )
+        await engine.dispose()
 
-        asyncio.run(run())
-
-    seed()
+    asyncio.run(seed())
 
     with TestClient(api.app) as client:
         assert client.post("/api/session", json={"email": OWNER_EMAIL, "password": "owner-password-1"}).status_code == 200
