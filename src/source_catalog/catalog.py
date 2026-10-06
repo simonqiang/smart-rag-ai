@@ -168,13 +168,17 @@ async def list_collections(uow: UnitOfWork, *, context: AccessContext) -> list[C
                 ),
                 {"workspace_id": context.workspace_id, "ids": permitted},
             )
-        )
-        return [
+        ).mappings().all()
+    collections = []
+    for row in rows:
+        collections.append(
             CollectionDTO(
-                collection_id=str(row["id"]), name=str(row["name"]), created_at=row["created_at"]
+                collection_id=str(row["id"]),
+                name=str(row["name"]),
+                created_at=row["created_at"],
             )
-            for row in rows.mappings()
-        ]
+        )
+    return collections
 
 
 async def list_sources(uow: UnitOfWork, *, context: AccessContext) -> list[SourceDTO]:
