@@ -82,7 +82,7 @@ These are master work packages. Before implementation, any package larger than o
   - Acceptance: generation and embedding are independent; missing model/unavailable host errors are typed.
   - Verify: contract tests use deterministic fakes plus optional Ollama smoke test.
   - Dependencies: Tasks 3–4.
-- [ ] **Task 11: Extract and normalize PDF, TXT, and Markdown**
+- [x] **Task 11: Extract and normalize PDF, TXT, and Markdown**
   - Acceptance: safe English/Chinese/Malay/mixed fixtures produce ordered, language-tagged text and citation locations; failures remain non-active.
   - Verify: parser fixture tests and worker retry tests pass.
   - Dependencies: Tasks 5, 9.
