@@ -70,10 +70,14 @@ These are master work packages. Before implementation, any package larger than o
 
 ## Phase 3 — First RAG slice
 
-- [ ] **Task 9: Register uploads and store original files safely**
+- [ ] **Task 9: Register uploads and store original files safely** (expanded into child tasks 9a–9c)
   - Acceptance: checksum, size/type validation, manifest, and duplicate warning work.
   - Verify: upload integration tests cover valid, corrupt, encrypted, oversized, and duplicate inputs.
   - Dependencies: Task 8.
+  - Child tasks (interfaces and acceptance criteria preserved from the master package):
+    - [ ] **9a: Upload registration service** — Migration `0005` for `source_versions` (state `uploaded`, object sha256, size, media type); `src/ingestion/uploads.py` with `register_upload(UploadRequest, AccessContext) -> UploadAccepted` — 50 MB cap, PDF magic + `/Encrypt` sniff, unsupported-type refusal with reason, content-addressed `ObjectStore` storage + manifest, duplicate-checksum warning, atomic source + version + `source.created`/`source.uploaded` audits, owner/admin only, collection must exist in the caller's workspace. Verify: `tests/integration/ingestion/test_uploads.py` (valid, duplicate, oversized, corrupt, encrypted, unsupported, unauthorized).
+    - [ ] **9b: Upload API route** — `apps/api/routes/uploads.py`: `POST /api/uploads` (multipart: file, collection_id, name) streaming with the size cap enforced while reading, `UploadRejected.reason` mapped to actionable 400/413 payloads, member/unknown-collection cases covered. Verify: `tests/api/test_upload_routes.py`.
+    - [ ] **9c: Upload UI** — `apps/web/src/features/sources/UploadSource.tsx` (collection select, name, file input, duplicate warning + rejection reasons displayed) reachable from `SourceListPage` for admins. Verify: component tests + `tsc --noEmit`; invalid content never becomes active (service-level assertions).
 - [ ] **Task 10: Define AI provider contracts and Ollama adapters**
   - Acceptance: generation and embedding are independent; missing model/unavailable host errors are typed.
   - Verify: contract tests use deterministic fakes plus optional Ollama smoke test.
