@@ -1,29 +1,26 @@
-import { useEffect, useState } from "react";
-
+import AppShell from "./AppShell";
 import SetupPage from "./features/auth/SetupPage";
 import SignInPage from "./features/auth/SignInPage";
 import UserAccessPage from "./features/settings/UserAccessPage";
-
-function usePath(): string {
-  const [path, setPath] = useState(window.location.pathname);
-  useEffect(() => {
-    const update = () => setPath(window.location.pathname);
-    window.addEventListener("popstate", update);
-    return () => window.removeEventListener("popstate", update);
-  }, []);
-  return path;
-}
-
-function navigate(path: string) {
-  window.history.pushState({}, "", path);
-  window.dispatchEvent(new PopStateEvent("popstate"));
-}
+import SourceListPage from "./features/sources/SourceListPage";
+import { navigate, usePath } from "./router";
 
 function App() {
   const path = usePath();
   if (path === "/setup") return <SetupPage />;
   if (path === "/signin") return <SignInPage />;
-  if (path === "/users") return <UserAccessPage />;
+  if (path === "/users")
+    return (
+      <AppShell>
+        <UserAccessPage />
+      </AppShell>
+    );
+  if (path === "/sources")
+    return (
+      <AppShell>
+        <SourceListPage />
+      </AppShell>
+    );
   return (
     <main>
       <h1>Smart RAG AI</h1>
