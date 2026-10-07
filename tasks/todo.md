@@ -86,13 +86,14 @@ These are master work packages. Before implementation, any package larger than o
   - Acceptance: safe English/Chinese/Malay/mixed fixtures produce ordered, language-tagged text and citation locations; failures remain non-active.
   - Verify: parser fixture tests and worker retry tests pass.
   - Dependencies: Tasks 5, 9.
-- [ ] **Task 12: Chunk, embed, and activate the first index generation**
+- [x] **Task 12: Chunk, embed, and activate the first index generation**
   - Acceptance: deterministic chunks (including CJK), language-aware keyword vectors, and compatible vectors activate atomically.
   - Verify: unit/integration tests cover empty content, dimension mismatch, and failed activation.
   - Dependencies: Tasks 10–11.
-- [ ] **Task 13: Retrieve authorized evidence with hybrid search**
+- [x] **Task 13: Retrieve authorized evidence with hybrid search**
   - Acceptance: semantic/keyword results merge with reciprocal-rank fusion under workspace/grant/version filters; Chinese segmenter selected by evaluation and approved before being added.
   - Verify: retrieval evaluation meets thresholds for each language and security tests show zero leakage.
+  - Note: Chinese keyword segmentation uses dependency-free character bigrams (spec §15 "segmented in the application"); no production dependency was added, so no owner approval was required. Swap for an approved segmenter if evaluation shows bigram recall below threshold.
   - Dependencies: Tasks 7, 12.
 - [ ] **Task 14: Generate answers and validate citations**
   - Acceptance: grounded answers in the question's language cite supplied evidence; weak evidence bypasses generation; typed conversation/query-rewrite and streaming/cancellation contracts exist.
