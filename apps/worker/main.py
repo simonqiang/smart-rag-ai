@@ -20,7 +20,10 @@ if not isinstance(dramatiq.get_broker(), RedisBroker):
 broker = dramatiq.get_broker()
 
 # Importing registers the actors with the broker.
-from apps.worker.tasks import extract  # noqa: F401
+from apps.worker.tasks import (
+    extract,  # noqa: F401
+    index,  # noqa: F401
+)
 
 
 @dramatiq.actor(max_retries=0)
