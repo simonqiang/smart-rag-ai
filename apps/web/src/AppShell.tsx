@@ -17,6 +17,7 @@ const linkStyle = {
 } as const;
 
 const links = [
+  { href: "/ask", label: "Ask" },
   { href: "/sources", label: "Sources" },
   { href: "/users", label: "User access" },
 ];

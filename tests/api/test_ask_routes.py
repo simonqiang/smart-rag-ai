@@ -281,6 +281,27 @@ def test_streaming_mode_emits_typed_frames_in_order(workspace) -> None:
     assert frames[-1]["text"] == DISPLAY_ANSWER
     assert frames[-1]["insufficient_evidence"] is False
     assert frames[2]["citation"]["quote"] == SHARED_TEXT
+    assert frames[-1]["provider"] == {"name": "ollama", "local": True}
+
+    # SSE clients continue the thread from the started frame alone.
+    conversation_id = frames[0]["conversation_id"]
+    assert conversation_id
+
+    async def persisted() -> int:
+        engine = create_async_engine(Settings.load().database_url)
+        try:
+            async with engine.begin() as connection:
+                return int((
+                    await connection.execute(
+                        text("SELECT count(*) FROM conversation_messages "
+                             "WHERE conversation_id = CAST(:id AS uuid)"),
+                        {"id": conversation_id},
+                    )
+                ).scalar_one())
+        finally:
+            await engine.dispose()
+
+    assert asyncio.run(persisted()) == 2
 
 
 def test_generation_timeout_streams_a_safe_error_frame(workspace) -> None:

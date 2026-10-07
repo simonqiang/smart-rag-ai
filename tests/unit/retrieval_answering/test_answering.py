@@ -62,6 +62,16 @@ def stream(question: str, ranked: RankedEvidence, provider, **kwargs):
     )
 
 
+def test_completed_frame_can_carry_provider_state() -> None:
+    event = AnswerStreamEvent(kind="completed", request_id="req-1", seq=4, text="[1]")
+    assert "provider" not in event.to_json()
+    badge = AnswerStreamEvent(
+        kind="completed", request_id="req-1", seq=4, text="[1]",
+        provider={"name": "ollama", "local": True},
+    )
+    assert badge.to_json()["provider"] == {"name": "ollama", "local": True}
+
+
 def collect(agen):
     async def run() -> list[AnswerStreamEvent]:
         return [event async for event in agen]
@@ -219,12 +229,14 @@ def test_stream_deltas_then_citation_then_completed() -> None:
         stream_chunks=[["The allowance ", "is 500 ", "per month ", f"[1:{EN_TEXT}]."]]
     )
 
-    events = collect(stream("What is the allowance?", grounded(EN_TEXT), provider))
+    events = collect(stream("What is the allowance?", grounded(EN_TEXT), provider,
+                            conversation_id="conv-9"))
 
     assert [event.kind for event in events] == [
         "started", "delta", "delta", "delta", "delta", "citation", "completed",
     ]
     assert all(event.request_id == "req-1" for event in events)
+    assert events[0].conversation_id == "conv-9"
     assert [event.seq for event in events] == list(range(1, len(events) + 1))
     assert "".join(event.text for event in events if event.kind == "delta") == \
         "The allowance is 500 per month [1:The allowance is 500 per month.]."

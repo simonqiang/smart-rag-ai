@@ -113,6 +113,8 @@ class AnswerStreamEvent:
     language: str | None = None
     insufficient_evidence: bool | None = None
     model: str | None = None
+    conversation_id: str | None = None
+    provider: dict | None = None  # set by the route on completed frames
 
     def to_json(self) -> dict:
         return {
@@ -128,6 +130,8 @@ class AnswerStreamEvent:
                 "language": self.language,
                 "insufficient_evidence": self.insufficient_evidence,
                 "model": self.model,
+                "conversation_id": self.conversation_id,
+                "provider": self.provider,
             }.items()
             if value is not None
         }
@@ -205,6 +209,7 @@ def stream_answer(
     generation: GenerationProvider,
     history: ConversationContext | None = None,
     request_id: str,
+    conversation_id: str | None = None,
 ) -> AsyncIterator[AnswerStreamEvent]:
     """The same run as typed frames; failures become ``error`` frames."""
     language = detect_language(question)
@@ -216,7 +221,7 @@ def stream_answer(
         return AnswerStreamEvent(request_id=request_id, seq=seq, **fields)
 
     async def run() -> AsyncIterator[AnswerStreamEvent]:
-        yield frame(kind="started", language=language)
+        yield frame(kind="started", language=language, conversation_id=conversation_id)
         if not evidence.is_confident:
             notice = _insufficient_notice(language)
             yield frame(kind="delta", text=notice)

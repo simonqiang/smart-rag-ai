@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -193,7 +194,8 @@ async def _streaming_exchange(
     request_id: str,
 ):
     events = stream_answer(
-        question, ranked, generation=generation(), history=history, request_id=request_id
+        question, ranked, generation=generation(), history=history,
+        request_id=request_id, conversation_id=conversation_id,
     )
     language = "en"
     citations: list[Citation] = []
@@ -206,6 +208,8 @@ async def _streaming_exchange(
                 citations.append(event.citation)
             if event.kind == "completed":
                 completed = event
+                # The badge is route state (Task 23), not an answering concern.
+                event = replace(event, provider=PROVIDER_BADGE)
             yield _sse(event)
     finally:
         if completed is not None:
