@@ -380,3 +380,65 @@ def test_embeddings_missing_payload_is_invalid(stub_ollama) -> None:
 
     with pytest.raises(InvalidProviderResponseError):
         _embedding_provider(stub_ollama(handler).host).embed(["one"])
+
+
+# --- streaming generation (Task 14b) --------------------------------------
+
+
+def _ndjson(lines: list[dict]) -> bytes:
+    return b"".join(json.dumps(line).encode() + b"\n" for line in lines)
+
+
+def test_stream_generate_yields_chunks_skips_empty_and_stops_at_done(stub_ollama) -> None:
+    def handler(request: dict) -> tuple[int, bytes]:
+        return 200, _ndjson([
+            {"response": "He", "done": False},
+            {"response": "", "done": False},
+            {"response": "llo", "done": False},
+            {"response": "", "done": True},
+        ])
+
+    server = stub_ollama(handler)
+    chunks = list(
+        _generation_provider(server.host).stream_generate(GenerationRequest(prompt="hi"))
+    )
+
+    assert chunks == ["He", "llo"]
+    assert server.requests[0]["stream"] is True
+
+
+def test_stream_generate_non_string_chunk_is_invalid(stub_ollama) -> None:
+    def handler(request: dict) -> tuple[int, bytes]:
+        return 200, _ndjson([{"response": 5, "done": False}])
+
+    with pytest.raises(InvalidProviderResponseError):
+        list(_generation_provider(stub_ollama(handler).host).stream_generate(
+            GenerationRequest(prompt="hi")
+        ))
+
+
+def test_stream_generate_non_dict_line_is_invalid(stub_ollama) -> None:
+    def handler(request: dict) -> tuple[int, bytes]:
+        return 200, _ndjson([{"done": False}])
+
+    with pytest.raises(InvalidProviderResponseError):
+        list(_generation_provider(stub_ollama(handler).host).stream_generate(
+            GenerationRequest(prompt="hi")
+        ))
+
+
+def test_stream_generate_malformed_line_is_invalid(stub_ollama) -> None:
+    def handler(request: dict) -> tuple[int, bytes]:
+        return 200, b"not-json\n"
+
+    with pytest.raises(InvalidProviderResponseError):
+        list(_generation_provider(stub_ollama(handler).host).stream_generate(
+            GenerationRequest(prompt="hi")
+        ))
+
+
+def test_stream_generate_connection_refused_is_unreachable() -> None:
+    with pytest.raises(ProviderUnavailableError):
+        list(_generation_provider("http://127.0.0.1:1").stream_generate(
+            GenerationRequest(prompt="hi")
+        ))

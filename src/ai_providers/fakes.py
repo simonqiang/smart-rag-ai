@@ -7,19 +7,24 @@ default. Recorded requests let tests assert what domain code sends.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterator
 
 from ai_providers.contracts import EmbeddingResult, GenerationRequest, GenerationResult
 
 
 class FakeGenerationProvider:
+    model = "fake-chat"
+
     def __init__(
         self,
         script: list[GenerationResult | Exception] | None = None,
         default_text: str = "fake answer",
+        stream_chunks: list[list[str]] | None = None,
     ) -> None:
         self.requests: list[GenerationRequest] = []
         self._script = list(script or [])
         self._default_text = default_text
+        self._stream_chunks = list(stream_chunks or [])
 
     def generate(self, request: GenerationRequest) -> GenerationResult:
         self.requests.append(request)
@@ -29,6 +34,19 @@ class FakeGenerationProvider:
                 raise item
             return item
         return GenerationResult(text=self._default_text, model="fake-chat")
+
+    def stream_generate(self, request: GenerationRequest) -> Iterator[str]:
+        self.requests.append(request)
+        if self._stream_chunks:
+            yield from self._stream_chunks.pop(0)
+            return
+        if self._script:
+            item = self._script.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            yield item.text
+            return
+        yield self._default_text
 
 
 def _deterministic_vector(text: str, dimension: int) -> list[float]:

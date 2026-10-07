@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Iterator
 from http.client import HTTPException
 
 from ai_providers.contracts import (
@@ -32,16 +32,17 @@ class _OllamaHttp:
         self._host = host.rstrip("/")
         self._timeout = timeout
 
-    def post(self, path: str, payload: dict, model: str) -> dict:
-        request = urllib.request.Request(
+    def _request(self, path: str, payload: dict) -> urllib.request.Request:
+        return urllib.request.Request(
             f"{self._host}{path}",
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
+
+    def _open(self, request: urllib.request.Request, path: str, model: str):
         try:
-            with urllib.request.urlopen(request, timeout=self._timeout) as response:
-                body = response.read()
+            return urllib.request.urlopen(request, timeout=self._timeout)
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
                 raise ModelMissingError(
@@ -60,6 +61,17 @@ class _OllamaHttp:
             ) from exc
         except OSError as exc:
             raise ProviderUnavailableError(f"Ollama not reachable at {self._host}") from exc
+
+    def post(self, path: str, payload: dict, model: str) -> dict:
+        try:
+            with self._open(self._request(path, payload), path, model) as response:
+                body = response.read()
+        except TimeoutError as exc:
+            raise ProviderUnavailableError(
+                f"Ollama timed out after {self._timeout:g}s at {self._host}", reason="timeout"
+            ) from exc
+        except OSError as exc:
+            raise ProviderUnavailableError(f"Ollama not reachable at {self._host}") from exc
         except HTTPException as exc:
             # e.g. IncompleteRead: the host died before the full response arrived.
             raise ProviderUnavailableError(
@@ -70,11 +82,37 @@ class _OllamaHttp:
         except ValueError as exc:
             raise InvalidProviderResponseError(f"non-JSON response from {self._host}{path}") from exc
 
+    def stream(self, path: str, payload: dict, model: str) -> Iterator[dict]:
+        """NDJSON line stream; errors during reads keep the same typed mapping."""
+        response = self._open(self._request(path, payload), path, model)
+        try:
+            with response:
+                for line in response:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        yield json.loads(line)
+                    except ValueError as exc:
+                        raise InvalidProviderResponseError(
+                            f"non-JSON line in stream from {self._host}{path}"
+                        ) from exc
+        except TimeoutError as exc:
+            raise ProviderUnavailableError(
+                f"Ollama timed out after {self._timeout:g}s at {self._host}", reason="timeout"
+            ) from exc
+        except OSError as exc:
+            raise ProviderUnavailableError(f"Ollama not reachable at {self._host}") from exc
+        except HTTPException as exc:
+            raise ProviderUnavailableError(
+                f"connection lost before the full response from {self._host}{path}"
+            ) from exc
+
 
 class OllamaGenerationProvider:
     def __init__(self, host: str, model: str, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> None:
         self.model = model
-        self._post: Callable[[str, dict, str], dict] = _OllamaHttp(host, timeout).post
+        self._http = _OllamaHttp(host, timeout)
 
     def generate(self, request: GenerationRequest) -> GenerationResult:
         payload: dict = {
@@ -85,13 +123,36 @@ class OllamaGenerationProvider:
         }
         if request.system:
             payload["system"] = request.system
-        data = self._post("/api/generate", payload, self.model)
+        data = self._http.post("/api/generate", payload, self.model)
         text = data.get("response") if isinstance(data, dict) else None
         if not isinstance(text, str):
             raise InvalidProviderResponseError(
                 "generate response is missing a string 'response' field"
             )
         return GenerationResult(text=text, model=self.model)
+
+    def stream_generate(self, request: GenerationRequest) -> Iterator[str]:
+        """Token stream over Ollama's NDJSON protocol (``stream: true``)."""
+        payload: dict = {
+            "model": self.model,
+            "prompt": request.prompt,
+            "stream": True,
+            "options": {"temperature": request.temperature},
+        }
+        if request.system:
+            payload["system"] = request.system
+        for data in self._http.stream("/api/generate", payload, self.model):
+            if not isinstance(data, dict):
+                raise InvalidProviderResponseError("stream line is not a JSON object")
+            if data.get("done"):
+                return
+            chunk = data.get("response")
+            if not isinstance(chunk, str):
+                raise InvalidProviderResponseError(
+                    "stream line is missing a string 'response' field"
+                )
+            if chunk:
+                yield chunk
 
 
 class OllamaEmbeddingProvider:
@@ -104,12 +165,12 @@ class OllamaEmbeddingProvider:
     ) -> None:
         self.model = model
         self._expected_dimensions = expected_dimensions
-        self._post: Callable[[str, dict, str], dict] = _OllamaHttp(host, timeout).post
+        self._http = _OllamaHttp(host, timeout)
 
     def embed(self, texts: list[str]) -> EmbeddingResult:
         if not texts:
             return EmbeddingResult(vectors=[], model=self.model)
-        data = self._post("/api/embed", {"model": self.model, "input": list(texts)}, self.model)
+        data = self._http.post("/api/embed", {"model": self.model, "input": list(texts)}, self.model)
         vectors = data.get("embeddings") if isinstance(data, dict) else None
         if not isinstance(vectors, list) or not all(isinstance(v, list) for v in vectors):
             raise InvalidProviderResponseError("'embeddings' is not a list of vectors")
