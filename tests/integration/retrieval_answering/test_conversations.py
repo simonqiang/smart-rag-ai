@@ -173,6 +173,33 @@ def test_conversation_access_is_private_to_its_user(db, workspace) -> None:
     run_db(db, denied)
 
 
+def test_get_conversation_returns_the_reopen_payload(db, workspace) -> None:
+    owner: AccessContext = workspace["owner_context"]
+
+    def flow(uow: UnitOfWork) -> Awaitable[dict]:
+        async def build() -> dict:
+            conversation_id = await create_conversation(uow, owner, title="reopen me")
+            await record_exchange(
+                uow, EventWriter(), context=owner, conversation_id=conversation_id,
+                question="q", answer_text="a [1:quote]",
+                citations=[{"label": 1, "chunk_id": "c1", "quote": "quote"}],
+                language="en", request_id="req-open", insufficient_evidence=False,
+            )
+            return await get_conversation(uow, context=owner, conversation_id=conversation_id)
+
+        return build()
+
+    conversation = run_db(db, flow)
+    assert conversation["title"] == "reopen me"
+    assert [message["role"] for message in conversation["messages"]] == ["user", "assistant"]
+    assistant = conversation["messages"][1]
+    assert assistant["content"] == "a [1:quote]"
+    assert assistant["citations"] == [{"label": 1, "chunk_id": "c1", "quote": "quote"}]
+    assert assistant["request_id"] == "req-open"
+    assert assistant["insufficient"] is False
+    assert assistant["created_at"]
+
+
 def test_rename_and_delete_conversation(db, workspace) -> None:
     owner: AccessContext = workspace["owner_context"]
 
