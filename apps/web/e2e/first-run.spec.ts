@@ -155,9 +155,66 @@ test("sign-in with a wrong password shows a generic error", async ({ page }) => 
   await expect(page.getByText(/invalid email or password/)).toBeVisible();
 });
 
+test("successful sign-in opens the Ask workspace and app navigation", async ({ page }) => {
+  await page.route("**/api/session", (route) => {
+    if (route.request().method() === "POST") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ user_id: "u1", expires_at: "2026-10-07T00:00:00Z" }),
+      });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        user_id: "u1",
+        workspace_id: "w1",
+        email: "owner@example.com",
+        role: "owner",
+        must_change_password: false,
+      }),
+    });
+  });
+  await page.route("**/api/sources", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
+  );
+  await page.route("**/api/conversations", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
+  );
+
+  await page.goto("/signin");
+  await page.getByLabel("Email").fill("owner@example.com");
+  await page.getByLabel("Password (at least 10 characters)").fill("owner-password-123");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page).toHaveURL(/\/ask$/);
+  await expect(page.getByRole("navigation", { name: "primary" }).getByRole("link", { name: "Sources" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Ask/i })).toBeVisible();
+});
+
 test("invitation acceptance works and rejects invalid tokens generically", async ({
   page,
 }) => {
+  await page.route("**/api/session", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        user_id: "u2",
+        workspace_id: "w1",
+        email: "member@example.com",
+        role: "member",
+        must_change_password: false,
+      }),
+    }),
+  );
+  await page.route("**/api/sources", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
+  );
+  await page.route("**/api/conversations", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
+  );
   await page.goto("/signin");
   await page.getByText("I have an invitation token").click();
 
@@ -182,7 +239,7 @@ test("invitation acceptance works and rejects invalid tokens generically", async
   await page.getByLabel("Invitation token").fill("good-token");
   await page.getByLabel("Password (at least 10 characters)").fill("member-pass-11");
   await page.getByRole("button", { name: "Accept invitation" }).click();
-  await expect(page.getByRole("heading", { name: "Signed in" })).toBeVisible();
+  await expect(page).toHaveURL(/\/ask$/);
   expect(attempts).toBe(2);
 });
 

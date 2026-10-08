@@ -16,6 +16,7 @@ dependencies = [
     "python-multipart>=0.0.32",
     "docling>=2.134.0",
     "charset-normalizer>=3.5.2",
+    "torch==2.14.1",
 ]
 
 [dependency-groups]
@@ -49,3 +50,11 @@ exclude_lines = ["if __name__ == .__main__.:",]
 [tool.mypy]
 files = ["src", "apps"]
 python_version = "3.12"
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { navigate } from "../../router";
 import { getJson, postJson, detailText } from "./api";
 
 const fieldStyle = { display: "block", width: "100%", marginBottom: "0.75rem", padding: "0.5rem" } as const;
@@ -31,11 +32,19 @@ export default function SignInPage() {
     }
     const who = await getJson("/api/session");
     setBusy(false);
-    if (who.ok) {
-      setMe(who.payload as unknown as Me);
-    } else {
-      setMe({ email, must_change_password: false });
+    if (!who.ok) {
+      setError("Sign-in succeeded, but the session could not be verified. Please try again.");
+      return;
     }
+    const authenticated = who.payload as Partial<Me>;
+    if (authenticated.must_change_password === true) {
+      setMe({
+        email: typeof authenticated.email === "string" ? authenticated.email : email,
+        must_change_password: true,
+      });
+      return;
+    }
+    navigate("/ask");
   }
 
   async function changePassword(event: React.FormEvent) {
@@ -48,7 +57,9 @@ export default function SignInPage() {
     });
     setBusy(false);
     if (result.ok) {
-      setMe({ email: me?.email ?? email, must_change_password: false });
+      setMe(null);
+      setPassword("");
+      setNewPassword("");
       setError("password changed; sign in again with the new password");
     } else {
       setError(detailText(result));
