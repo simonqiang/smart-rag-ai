@@ -3,9 +3,9 @@
 Consumes ``source_delete`` jobs recorded by ``request_permanent_deletion``
 and dispatched only from committed outbox rows. The purge itself is
 idempotent (see ``source_catalog.deletion``): a ``DeletionIncomplete``
-verification failure fails the lease so a later delivery retries the
-remaining steps, and a clean delivery records the ``source.deleted`` audit
-event with its zero-residue evidence.
+verification failure releases the job for Dramatiq retry, and a clean
+delivery records the ``source.deleted`` audit event with its zero-residue
+evidence.
 """
 
 from __future__ import annotations
@@ -64,8 +64,8 @@ async def delete_payload(engine: AsyncEngine, store: ObjectStore, payload: dict)
             engine, store, inventory, EventWriter(),
             source_id=str(payload["source_id"]),
         )
-    except DeletionIncomplete as failure:
-        await claims.fail(lease)
-        return f"incomplete:{failure}"
+    except DeletionIncomplete:
+        await claims.retry(lease)
+        raise
     await claims.complete(lease)
     return f"deleted:{evidence.versions}"

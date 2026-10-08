@@ -707,8 +707,20 @@ def test_actor_composes_settings_store_and_purge(
             await engine.dispose()
 
     retry_job = asyncio.run(enqueue_again())
+    with pytest.raises(DeletionIncomplete):
+        task_module.source_delete(job_id=str(retry_job), source_id=workspace["source_id"])
+
+    from source_catalog.deletion import DeletionEvidence
+
+    async def recovered(*_args, **_kwargs) -> DeletionEvidence:
+        return DeletionEvidence(
+            source_id=workspace["source_id"], versions=0, manifests=0, vectors=0,
+            redacted_messages=0, backups=0, residue=0,
+        )
+
+    monkeypatch.setattr(task_module, "delete_source", recovered)
     retry = task_module.source_delete(job_id=str(retry_job), source_id=workspace["source_id"])
-    assert retry.startswith("incomplete:")
+    assert retry == "deleted:0"
 
     # A delivery whose lease is already settled is skipped, not reprocessed.
     assert task_module.source_delete(job_id=str(job), source_id=workspace["source_id"]) == "skipped"
