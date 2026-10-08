@@ -147,6 +147,18 @@ def _embedding_provider(host: str, timeout: float = 30) -> OllamaEmbeddingProvid
     return OllamaEmbeddingProvider(host, model="bge-m3", expected_dimensions=4, timeout=timeout)
 
 
+def test_generation_disables_thinking_for_reasoning_models(stub_ollama) -> None:
+    # qwen3 thinks by default; on CPU that burns minutes before the first
+    # visible token. The adapter opts out explicitly.
+    def handler(request: dict) -> tuple[int, dict]:
+        return 200, {"response": "ok"}
+
+    server = stub_ollama(handler)
+    _generation_provider(server.host).generate(GenerationRequest(prompt="hi"))
+
+    assert server.requests[0]["think"] is False
+
+
 def test_generation_returns_text_and_keeps_streaming_off(stub_ollama) -> None:
     def handler(request: dict) -> tuple[int, dict]:
         return 200, {"response": "grounded answer"}

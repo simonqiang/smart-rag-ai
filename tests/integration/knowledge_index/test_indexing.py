@@ -396,13 +396,18 @@ def test_worker_indexes_and_activates(db, workspace, indexed, store_root) -> Non
     async def verify(_engine, uow, _store) -> tuple:
         async with uow.transaction() as transaction:
             version_state = (
-                await transaction.execute(text("SELECT state FROM source_versions"))
+                await transaction.execute(
+                    text("SELECT state FROM source_versions WHERE id = :id"),
+                    {"id": indexed["version_id"]},
+                )
             ).scalar_one()
             generation_state = (
                 await transaction.execute(text("SELECT state FROM index_generations"))
             ).scalar_one()
             job_status = (
-                await transaction.execute(text("SELECT status FROM jobs"))
+                await transaction.execute(
+                    text("SELECT status FROM jobs WHERE id = :id"), {"id": str(job)}
+                )
             ).scalar_one()
         return version_state, generation_state, job_status
 
@@ -543,10 +548,15 @@ def test_actor_composes_settings_store_and_pipeline(
         try:
             async with engine.begin() as connection:
                 version_state = (
-                    await connection.execute(text("SELECT state FROM source_versions"))
+                    await connection.execute(
+                        text("SELECT state FROM source_versions WHERE id = :id"),
+                        {"id": indexed["version_id"]},
+                    )
                 ).scalar_one()
                 job_status = (
-                    await connection.execute(text("SELECT status FROM jobs"))
+                    await connection.execute(
+                        text("SELECT status FROM jobs WHERE id = :id"), {"id": str(job)}
+                    )
                 ).scalar_one()
         finally:
             await engine.dispose()

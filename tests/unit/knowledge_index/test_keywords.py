@@ -31,3 +31,18 @@ def test_segment_splits_cjk_into_bigrams_and_keeps_latin_words() -> None:
     assert keywords.segment("using bge-m3 嵌入") == "using bge-m3 嵌入"
     assert keywords.segment("中文检索") == "中文 文检 检索"
     assert keywords.segment("单") == "单"  # a lone character stays itself
+
+
+def test_or_query_joins_segmented_tokens_for_recall() -> None:
+    from knowledge_index.keywords import to_or_query
+
+    assert to_or_query("居家办公 津贴") == "'居家' | '家办' | '办公' | '津贴'"
+    assert to_or_query("it's home-office") == "'it''s' | 'home-office'"
+
+
+def test_or_query_on_a_question_keeps_matching_bigrams() -> None:
+    from knowledge_index.keywords import segment, to_or_query
+
+    # Question words (是多少, 什么时候) must not zero out the channel.
+    query = to_or_query(segment("居家办公津贴是多少？"))
+    assert "'居家'" in query and "| '办公'" in query

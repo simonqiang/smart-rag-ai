@@ -325,3 +325,12 @@ def test_error_frame_payload_is_json_safe() -> None:
     payload = event.to_json()
     assert payload["reason"] == "timeout"
     assert "text" not in payload and "citation" not in payload
+
+
+def test_validate_citations_strips_the_documented_quote_marks() -> None:
+    # The policy's documented marker wraps the quote in straight quotes.
+    display, citations = validate_citations(
+        f'Allowance is 500 [1:"{EN_TEXT}"]', grounded(EN_TEXT)
+    )
+    assert display == "Allowance is 500 [1]"
+    assert citations[0].quote == EN_TEXT

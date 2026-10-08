@@ -15,10 +15,19 @@ setup:
 	$(NPM) install
 
 up:
-	docker compose up -d --build
+	docker compose up -d --build --scale worker=1 --scale dispatcher=1
 
 down:
 	docker compose down
+
+# Background job processing races database-backed tests (a committed upload
+# gets processed twice: once by the test, once by the live pipeline), so the
+# pytest gates run with the worker and dispatcher scaled out.
+quiet-stack:
+	@docker compose stop worker dispatcher 2>/dev/null || true
+
+live-stack:
+	@docker compose start worker dispatcher 2>/dev/null || true
 
 migrate:
 	$(UV) run alembic upgrade head
@@ -54,19 +63,19 @@ typecheck-python:
 typecheck-web:
 	$(NPM) run typecheck -w apps/web
 
-test-unit:
+test-unit: quiet-stack
 	$(PYTEST) tests/unit -q
 
-test-api:
+test-api: quiet-stack
 	$(PYTEST) tests/api -q
 
 test-web:
 	$(NPM) run test -w apps/web
 
-test-integration:
+test-integration: quiet-stack
 	$(PYTEST) tests/integration -q
 
-test-security:
+test-security: quiet-stack
 	$(PYTEST) tests/security -q
 
 test-performance:
@@ -78,7 +87,7 @@ test-e2e:
 test-e2e-full:
 	cd apps/web && npx playwright test
 
-coverage:
+coverage: quiet-stack
 	$(PYTEST) tests --cov=src --cov=apps --cov-branch --cov-report= -q
 	$(UV) run coverage xml -o build/coverage.xml
 	$(UV) run coverage json -o build/coverage.json

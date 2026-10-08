@@ -21,7 +21,7 @@ from ai_providers.contracts import EmbeddingDimensionError, EmbeddingProvider
 from foundation.unit_of_work import UnitOfWork
 from identity_access.authorization import AccessContext
 from ingestion.extraction import detect_language
-from knowledge_index.keywords import config_for, segment
+from knowledge_index.keywords import config_for, to_or_query
 from retrieval_answering.ranking import reciprocal_rank_fusion
 
 __all__ = [
@@ -115,12 +115,12 @@ async def retrieve(
         bindparam("grants", expanding=True),
         *([bindparam("source_id")] if source_filter else []),
     )
-    query_text = segment(query)
+    or_query = to_or_query(query)
     keyword_sql = text(
         f"SELECT c.id {_auth_filter(source_id=source_filter)} "
-        "AND c.keywords @@ plainto_tsquery(CAST(:config AS regconfig), :query_text) "
+        "AND c.keywords @@ to_tsquery(CAST(:config AS regconfig), :query_text) "
         "ORDER BY ts_rank(c.keywords, "
-        "plainto_tsquery(CAST(:config AS regconfig), :query_text)) DESC LIMIT :pool"
+        "to_tsquery(CAST(:config AS regconfig), :query_text)) DESC LIMIT :pool"
     ).bindparams(
         bindparam("grants", expanding=True),
         *([bindparam("source_id")] if source_filter else []),
@@ -146,7 +146,7 @@ async def retrieve(
         keyword_ids = await _channel_ids(transaction, keyword_sql, {
             **base_parameters,
             "config": config_for(detect_language(query)),
-            "query_text": query_text,
+            "query_text": or_query,
             "pool": CANDIDATE_POOL,
         })
 

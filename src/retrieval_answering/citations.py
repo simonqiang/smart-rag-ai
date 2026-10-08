@@ -85,7 +85,12 @@ def validate_citations(
         raise MalformedAnswerError("answer carries no citation markers")
 
     citations: list[Citation] = []
-    for label_text, quote in markers:
+    for label_text, quoted in markers:
+        # The documented format wraps the quote in straight quotes; models
+        # also sometimes drop them. Accept both.
+        quote = quoted.strip()
+        if len(quote) >= 2 and quote[0] == '"' and quote[-1] == '"':
+            quote = quote[1:-1]
         label = int(label_text)
         if label < 1 or label > len(evidence.items):
             raise UngroundedAnswerError(

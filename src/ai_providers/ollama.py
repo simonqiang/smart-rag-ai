@@ -119,6 +119,9 @@ class OllamaGenerationProvider:
             "model": self.model,
             "prompt": request.prompt,
             "stream": False,
+            # Reasoning models (qwen3) think by default; on CPU that burns
+            # minutes before the first visible token. Ignored by plain models.
+            "think": False,
             "options": {"temperature": request.temperature},
         }
         if request.system:
@@ -137,6 +140,7 @@ class OllamaGenerationProvider:
             "model": self.model,
             "prompt": request.prompt,
             "stream": True,
+            "think": False,
             "options": {"temperature": request.temperature},
         }
         if request.system:

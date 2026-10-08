@@ -15,7 +15,7 @@ mixing keyword vectors.
 
 from __future__ import annotations
 
-__all__ = ["KEYWORD_CONFIGS", "LANGUAGE_CONFIG_VERSION", "config_for", "segment"]
+__all__ = ["KEYWORD_CONFIGS", "LANGUAGE_CONFIG_VERSION", "config_for", "segment", "to_or_query"]
 
 LANGUAGE_CONFIG_VERSION = 1
 
@@ -56,3 +56,14 @@ def segment(text: str) -> str:
         else:
             pieces.append(token)
     return " ".join(pieces)
+
+
+def to_or_query(text: str) -> str:
+    """Segmented query text as an OR tsquery string.
+
+    AND semantics (``plainto_tsquery``) zero out the keyword channel whenever
+    a question carries one word the chunk lacks — English hides this behind
+    stopword removal, Chinese bigrams do not get that mercy. OR keeps recall
+    and lets ``ts_rank`` ordering pick the best chunk.
+    """
+    return " | ".join(f"'{token.replace(chr(39), chr(39) * 2)}'" for token in segment(text).split())
