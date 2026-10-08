@@ -191,6 +191,7 @@ def test_rolled_back_enqueue_never_reaches_redis(
             return await client.llen("dramatiq:default")
         finally:
             await engine.dispose()
+            await client.flushdb()  # shared stack Redis: drop test messages
             await client.aclose()
 
     assert asyncio.run(scenario()) == 0
@@ -221,6 +222,7 @@ def test_dispatcher_relays_committed_outbox_to_broker(db: Settings, settings: Se
             return sent, await client.llen("dramatiq:default")
         finally:
             await engine.dispose()
+            await client.flushdb()  # shared stack Redis: drop test messages
             await client.aclose()
 
     assert asyncio.run(scenario()) == (2, 2)
@@ -250,6 +252,7 @@ def test_crash_before_publication_mark_republishes(db: Settings, settings: Setti
             return await client.llen("dramatiq:default")
         finally:
             await engine.dispose()
+            await client.flushdb()  # shared stack Redis: drop test messages
             await client.aclose()
 
     assert asyncio.run(scenario()) == 2  # duplicate delivered; claims deduplicate
@@ -277,6 +280,7 @@ def test_dispatcher_republishes_after_redis_loss(db: Settings, settings: Setting
             return await client.llen("dramatiq:default")
         finally:
             await engine.dispose()
+            await client.flushdb()  # shared stack Redis: drop test messages
             await client.aclose()
 
     assert asyncio.run(scenario()) == 1
