@@ -84,7 +84,7 @@ async def index_payload(
     if version is None:
         await claims.fail(lease)
         return "missing_version"
-    if version["state"] == "indexed":
+    if version["state"] in ("indexed", "active"):
         await claims.complete(lease)
         return "already_indexed"
     if version["state"] != "extracted":

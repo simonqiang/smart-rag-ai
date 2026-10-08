@@ -168,3 +168,110 @@ test("shell navigation reaches user access without hover-only actions", async ({
   await expect(page.getByText("Employee Handbook")).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
+
+// --- Task 16: archive, version history, cutover, rollback ---
+
+const versionsRoute = "**/api/sources/s1/versions";
+
+async function mockOwnerSession(page: Page) {
+  await page.route("**/api/session", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        user_id: "u1",
+        email: "owner@example.com",
+        role: "owner",
+      }),
+    }),
+  );
+  // The owner page also mounts the upload form, which lists collections.
+  await page.route(collectionsRoute, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        { collection_id: "c1", name: "Shared", created_at: "2026-10-01T00:00:00Z" },
+      ]),
+    }),
+  );
+}
+
+test("an admin archives and unarchives a source in place", async ({ page }) => {
+  await mockOwnerSession(page);
+  let archived = false;
+  await page.route(sourcesRoute, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([{ ...shared[0], state: archived ? "archived" : "active" }]),
+    }),
+  );
+  let posts = 0;
+  await page.route("**/api/sources/s1/*", (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    posts += 1;
+    archived = posts % 2 === 1;
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ source_id: "s1", state: archived ? "archived" : "active" }),
+    });
+  });
+  await page.goto("/sources");
+
+  const archive = page.getByRole("button", { name: "Archive" });
+  await expect(archive).toBeVisible();
+  await archive.click();
+  await expect(page.getByRole("button", { name: "Unarchive" })).toBeVisible();
+  await page.getByRole("button", { name: "Unarchive" }).click();
+  await expect(page.getByRole("button", { name: "Archive" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test("version history cuts over to a ready replacement", async ({ page }) => {
+  await mockOwnerSession(page);
+  await page.route(sourcesRoute, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([shared[0]]),
+    }),
+  );
+  let cutover = false;
+  await page.route(versionsRoute, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        cutover
+          ? [
+              { source_id: "s1", version_id: "v2", state: "active", filename: "travel-v2.txt", size_bytes: 20, created_at: "2026-10-03T00:00:00Z" },
+              { source_id: "s1", version_id: "v1", state: "superseded", filename: "travel.txt", size_bytes: 18, created_at: "2026-10-01T00:00:00Z" },
+            ]
+          : [
+              { source_id: "s1", version_id: "v1", state: "active", filename: "travel.txt", size_bytes: 18, created_at: "2026-10-01T00:00:00Z" },
+              { source_id: "s1", version_id: "v2", state: "indexed", filename: "travel-v2.txt", size_bytes: 20, created_at: "2026-10-03T00:00:00Z" },
+            ],
+      ),
+    }),
+  );
+  await page.route("**/api/sources/s1/versions/v2/activate", (route) => {
+    cutover = true;
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ source_id: "s1", active_version_id: "v2" }),
+    });
+  });
+  await page.goto("/sources");
+
+  await page.getByRole("button", { name: "Version history" }).click();
+  await expect(page.getByText("travel.txt")).toBeVisible();
+  await expect(page.getByText("travel-v2.txt")).toBeVisible();
+
+  await page.getByRole("button", { name: "Make active" }).click();
+  await expect(page.getByText("superseded").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Make active" })).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+});

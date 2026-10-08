@@ -123,7 +123,7 @@ These are master work packages. Before implementation, any package larger than o
 
 ## Phase 4 — Knowledge lifecycle
 
-- [ ] **Task 16: Replace and roll back immutable source versions**
+- [x] **Task 16: Replace and roll back immutable source versions**
   - Acceptance: admins can archive/unarchive with immediate retrieval exclusion; old version stays active until validated cutover; rollback creates a new version; each transition is audited transactionally.
   - Verify: concurrency/integration tests prove no mixed or partial knowledge.
   - Dependencies: Tasks 9–14.

@@ -76,7 +76,7 @@ def _auth_filter(*, source_id: bool) -> str:
     return (
         "FROM index_chunks c "
         "JOIN index_generations g ON g.id = c.generation_id AND g.state = 'active' "
-        "JOIN source_versions v ON v.id = c.source_version_id AND v.state = 'indexed' "
+        "JOIN source_versions v ON v.id = c.source_version_id AND v.state = 'active' "
         "JOIN sources s ON s.id = c.source_id AND s.state = 'active' "
         "WHERE c.workspace_id = :workspace_id "
         "AND s.collection_id IN :grants "

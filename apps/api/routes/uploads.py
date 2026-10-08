@@ -37,6 +37,23 @@ def _store() -> ObjectStore:
     return ObjectStore(Path(Settings.load().data_dir))
 
 
+async def read_capped(file: UploadFile, limit: int) -> bytes:
+    """Stream a multipart body under the size cap (shared by upload routes)."""
+    data = bytearray()
+    try:
+        while chunk := await file.read(_READ_CHUNK):
+            data.extend(chunk)
+            if len(data) > limit:
+                raise HTTPException(
+                    status_code=413, detail=REJECTION_MESSAGES["over_limit"]
+                )
+    except OSError:
+        raise HTTPException(
+            status_code=400, detail="upload interrupted; please retry"
+        ) from None
+    return bytes(data)
+
+
 @router.post("/uploads", status_code=201)
 async def upload(
     request: Request,
@@ -50,19 +67,7 @@ async def upload(
     authorize("source.create", ProtectedResource(context.workspace_id), context)
 
     limit = _limit_bytes()
-    data = bytearray()
-    try:
-        while chunk := await file.read(_READ_CHUNK):
-            data.extend(chunk)
-            if len(data) > limit:
-                raise HTTPException(
-                    status_code=413, detail=REJECTION_MESSAGES["over_limit"]
-                )
-    except OSError:
-        raise HTTPException(
-            status_code=400, detail="upload interrupted; please retry"
-        ) from None
-
+    data = await read_capped(file, limit)
     try:
         accepted = await register_upload(
             uow(),
@@ -72,7 +77,7 @@ async def upload(
             collection_id=collection_id,
             name=name,
             filename=file.filename or "upload.bin",
-            data=bytes(data),
+            data=data,
             max_bytes=limit,
         )
     except UploadRejected as rejected:

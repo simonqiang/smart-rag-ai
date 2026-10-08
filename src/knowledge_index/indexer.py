@@ -76,7 +76,9 @@ async def index_version(
         ).first()
         if version is None:
             raise IndexingError("version_not_found")
-        if version.state == "indexed":
+        if version.state in ("indexed", "active"):
+            # 'active' is the live lifecycle state (Task 16); 'indexed' is a
+            # ready replacement awaiting cutover. Both mean: already indexed.
             existing = await _existing_generation(transaction, source_version_id, "active")
             return _as_indexed(existing, "active", source_version_id, duplicate=True)
         if version.state != "extracted":

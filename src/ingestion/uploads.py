@@ -26,7 +26,7 @@ from identity_access.authorization import (
     ProtectedResource,
     authorize,
 )
-from source_catalog.catalog import CollectionNotFound
+from source_catalog.catalog import CollectionNotFound, SourceNotFound
 
 # ponytail: owner-confirmed 50 MB cap (spec §15); move to config when settings land
 UPLOAD_LIMIT_BYTES = 50 * 1024 * 1024
@@ -94,18 +94,34 @@ async def register_upload(
     filename: str,
     data: bytes,
     max_bytes: int = UPLOAD_LIMIT_BYTES,
+    source_id: str | None = None,
 ) -> UploadAccepted:
     authorize("source.create", ProtectedResource(context.workspace_id), context)
     media_type = _validate(data, filename, max_bytes)
     async with uow.transaction() as transaction:
-        collection = (
-            await transaction.execute(
-                text("SELECT workspace_id FROM collections WHERE id = :id"),
-                {"id": collection_id},
-            )
-        ).scalar_one_or_none()
-        if collection is None or str(collection) != context.workspace_id:
-            raise CollectionNotFound(collection_id)
+        if source_id is None:
+            collection = (
+                await transaction.execute(
+                    text("SELECT workspace_id FROM collections WHERE id = :id"),
+                    {"id": collection_id},
+                )
+            ).scalar_one_or_none()
+            if collection is None or str(collection) != context.workspace_id:
+                raise CollectionNotFound(collection_id)
+        else:
+            # Replacement upload (Task 16): the target source must exist in the
+            # caller's workspace and still be live; unknown and foreign IDs are
+            # indistinguishable so IDs cannot be probed.
+            target = (
+                await transaction.execute(
+                    text("SELECT workspace_id, state FROM sources WHERE id = :id"),
+                    {"id": source_id},
+                )
+            ).mappings().first()
+            if target is None or str(target["workspace_id"]) != context.workspace_id:
+                raise SourceNotFound(source_id)
+            if target["state"] != "active":
+                raise SourceNotFound(source_id)
         duplicate = (
             await transaction.execute(
                 text(
@@ -120,23 +136,26 @@ async def register_upload(
     # idempotent, so a rolled-back commit leaves only a harmless orphan.
     address = store.put(data)
 
-    source_id = str(uuid.uuid4())
+    new_source_id = str(uuid.uuid4())
     version_id = str(uuid.uuid4())
+    if source_id is None:
+        source_id = new_source_id
     async with uow.transaction() as transaction:
-        await transaction.execute(
-            text(
-                "INSERT INTO sources (id, workspace_id, collection_id, name, "
-                "state, created_by) VALUES (:id, :workspace_id, :collection_id, "
-                ":name, 'active', :created_by)"
-            ),
-            {
-                "id": source_id,
-                "workspace_id": context.workspace_id,
-                "collection_id": collection_id,
-                "name": name,
-                "created_by": context.user_id,
-            },
-        )
+        if source_id == new_source_id:
+            await transaction.execute(
+                text(
+                    "INSERT INTO sources (id, workspace_id, collection_id, name, "
+                    "state, created_by) VALUES (:id, :workspace_id, :collection_id, "
+                    ":name, 'active', :created_by)"
+                ),
+                {
+                    "id": source_id,
+                    "workspace_id": context.workspace_id,
+                    "collection_id": collection_id,
+                    "name": name,
+                    "created_by": context.user_id,
+                },
+            )
         await transaction.execute(
             text(
                 "INSERT INTO source_versions (id, workspace_id, source_id, "
@@ -155,15 +174,16 @@ async def register_upload(
                 "created_by": context.user_id,
             },
         )
-        await writer.record(
-            AuditEvent(
-                type="source.created",
-                actor=context.user_id,
-                subject=source_id,
-                metadata={"name": name, "collection_id": collection_id},
-            ),
-            transaction,
-        )
+        if source_id == new_source_id:
+            await writer.record(
+                AuditEvent(
+                    type="source.created",
+                    actor=context.user_id,
+                    subject=source_id,
+                    metadata={"name": name, "collection_id": collection_id},
+                ),
+                transaction,
+            )
         await writer.record(
             AuditEvent(
                 type="source.uploaded",
@@ -175,6 +195,7 @@ async def register_upload(
                     "size": len(data),
                     "media_type": media_type,
                     "filename": filename,
+                    **({"replacement_of": source_id} if source_id != new_source_id else {}),
                 },
             ),
             transaction,
