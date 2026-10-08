@@ -2,6 +2,7 @@
 
 import asyncio
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,7 @@ from knowledge_index.generations import activate_generation
 from knowledge_index.indexer import index_version
 from retrieval_answering.retrieval import retrieve
 from source_catalog.catalog import SourceNotFound, create_collection
+from source_catalog.deletion import request_permanent_deletion
 from source_catalog.version_service import (
     VersionNotReady,
     activate_ready_version,
@@ -343,6 +345,140 @@ def test_archive_excludes_retrieval_immediately_then_unarchive_restores(db, work
     assert sources == [workspace["source_id"]]
     assert len(_audits(db, "source.archived")) == 1
     assert len(_audits(db, "source.unarchived")) == 1
+
+
+def test_unarchive_cannot_reverse_permanent_deletion(db, workspace) -> None:
+    def delete(uow, engine, store) -> None:
+        return request_permanent_deletion(
+            uow, EventWriter(), context=_owner(workspace), source_id=workspace["source_id"],
+        )
+
+    _run(db, delete)
+
+    for transition in (archive_source, unarchive_source):
+        def mutate(uow, engine, store, action=transition) -> None:
+            return action(
+                uow, EventWriter(), context=_owner(workspace), source_id=workspace["source_id"],
+            )
+
+        with pytest.raises(SourceNotFound):
+            _run(db, mutate)
+
+    async def source_state() -> str:
+        engine = create_async_engine(db.database_url)
+        try:
+            async with engine.begin() as connection:
+                state = await connection.execute(
+                    text("SELECT state FROM sources WHERE id = :id"),
+                    {"id": workspace["source_id"]},
+                )
+                return str(state.scalar_one())
+        finally:
+            await engine.dispose()
+
+    assert asyncio.run(source_state()) == "deleted"
+
+
+@pytest.mark.parametrize(
+    "remove_source_row", [False, True], ids=["after-tombstone", "after-purge"],
+)
+def test_replacement_upload_cannot_commit_after_deletion(
+    db, workspace, store_root, remove_source_row,
+) -> None:
+    class DeleteAfterPreflight(UnitOfWork):
+        def __init__(self, engine) -> None:
+            super().__init__(engine)
+            self._engine_for_test = engine
+            self._transactions = 0
+
+        @asynccontextmanager
+        async def transaction(self):
+            async with super().transaction() as transaction:
+                yield transaction
+            self._transactions += 1
+            if self._transactions == 1:
+                if remove_source_row:
+                    async with UnitOfWork(self._engine_for_test).transaction() as transaction:
+                        await transaction.execute(
+                            text("DELETE FROM index_chunks WHERE source_id = :id"),
+                            {"id": workspace["source_id"]},
+                        )
+                        await transaction.execute(
+                            text(
+                                "DELETE FROM index_generations WHERE source_version_id IN "
+                                "(SELECT id FROM source_versions WHERE source_id = :id)"
+                            ),
+                            {"id": workspace["source_id"]},
+                        )
+                        await transaction.execute(
+                            text("DELETE FROM source_versions WHERE source_id = :id"),
+                            {"id": workspace["source_id"]},
+                        )
+                        await transaction.execute(
+                            text("DELETE FROM sources WHERE id = :id"),
+                            {"id": workspace["source_id"]},
+                        )
+                else:
+                    await request_permanent_deletion(
+                        UnitOfWork(self._engine_for_test), EventWriter(),
+                        context=_owner(workspace), source_id=workspace["source_id"],
+                    )
+
+    class TrackingStore(ObjectStore):
+        puts = 0
+
+        def put(self, data: bytes) -> str:
+            self.puts += 1
+            return super().put(data)
+
+    store = TrackingStore(store_root)
+
+    async def upload() -> None:
+        engine = create_async_engine(db.database_url)
+        try:
+            await register_upload(
+                DeleteAfterPreflight(engine), EventWriter(), store,
+                context=_owner(workspace), collection_id=workspace["collection_id"],
+                name="Travel", filename="travel-v2.txt",
+                data=NEW_TEXT.encode("utf-8"), source_id=workspace["source_id"],
+            )
+        finally:
+            await engine.dispose()
+
+    with pytest.raises(SourceNotFound):
+        asyncio.run(upload())
+
+    assert store.puts == 0
+
+
+def test_replacement_preflight_rejects_unknown_source_before_storage_write(
+    db, workspace, store_root,
+) -> None:
+    class TrackingStore(ObjectStore):
+        puts = 0
+
+        def put(self, data: bytes) -> str:
+            self.puts += 1
+            return super().put(data)
+
+    store = TrackingStore(store_root)
+
+    async def upload() -> None:
+        engine = create_async_engine(db.database_url)
+        try:
+            await register_upload(
+                UnitOfWork(engine), EventWriter(), store,
+                context=_owner(workspace), collection_id=workspace["collection_id"],
+                name="Travel", filename="travel-v2.txt",
+                data=NEW_TEXT.encode("utf-8"), source_id=str(uuid.uuid4()),
+            )
+        finally:
+            await engine.dispose()
+
+    with pytest.raises(SourceNotFound):
+        asyncio.run(upload())
+
+    assert store.puts == 0
 
 
 def test_archive_requires_admin(db, workspace) -> None:

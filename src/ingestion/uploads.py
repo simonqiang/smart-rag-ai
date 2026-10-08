@@ -132,15 +132,23 @@ async def register_upload(
             )
         ).first() is not None
 
-    # Filesystem write outside the transaction: content-addressed objects are
-    # idempotent, so a rolled-back commit leaves only a harmless orphan.
-    address = store.put(data)
-
     new_source_id = str(uuid.uuid4())
     version_id = str(uuid.uuid4())
     if source_id is None:
         source_id = new_source_id
+    address: str | None = store.put(data) if source_id == new_source_id else None
     async with uow.transaction() as transaction:
+        if source_id != new_source_id:
+            target = (
+                await transaction.execute(
+                    text("SELECT workspace_id, state FROM sources WHERE id = :id FOR UPDATE"),
+                    {"id": source_id},
+                )
+            ).mappings().first()
+            if target is None or str(target["workspace_id"]) != context.workspace_id:
+                raise SourceNotFound(source_id)
+            if target["state"] != "active":
+                raise SourceNotFound(source_id)
         if source_id == new_source_id:
             await transaction.execute(
                 text(
@@ -156,6 +164,10 @@ async def register_upload(
                     "created_by": context.user_id,
                 },
             )
+        if address is None:
+            # For replacements, the source row lock ensures deletion either
+            # sees this version or prevents its object from being written.
+            address = store.put(data)
         await transaction.execute(
             text(
                 "INSERT INTO source_versions (id, workspace_id, source_id, "

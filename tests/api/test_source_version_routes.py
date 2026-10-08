@@ -146,6 +146,21 @@ def test_stage_replacement_unknown_source_is_generic_404(workspace) -> None:
     assert missing_stage.json() == missing_archive.json()
 
 
+def test_stage_replacement_rejects_unsupported_upload(workspace) -> None:
+    with TestClient(api.app) as client:
+        _sign_in(client, OWNER)
+        source_id = _source(client)
+        rejected = client.post(
+            f"/api/sources/{source_id}/versions",
+            files={"file": ("malware.exe", b"not an accepted document")},
+        )
+
+    assert rejected.status_code == 400
+    assert rejected.json() == {
+        "detail": "unsupported file type; supported: PDF, TXT, Markdown",
+    }
+
+
 def test_activate_not_ready_returns_409_and_ready_cuts_over(workspace) -> None:
     with TestClient(api.app) as client:
         _sign_in(client, OWNER)

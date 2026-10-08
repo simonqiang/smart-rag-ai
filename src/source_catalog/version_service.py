@@ -60,8 +60,12 @@ async def _owned_source(transaction, context: AccessContext, source_id: str) -> 
         .mappings()
         .first()
     )
-    if row is None or str(row["workspace_id"]) != context.workspace_id:
-        # Unknown and foreign IDs are indistinguishable: IDs cannot be probed.
+    if (
+        row is None
+        or str(row["workspace_id"]) != context.workspace_id
+        or row["state"] == "deleted"
+    ):
+        # Unknown, foreign, and tombstoned sources all return the same 404.
         raise SourceNotFound(source_id)
     return dict(row)
 
