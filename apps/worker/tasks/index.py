@@ -51,8 +51,11 @@ def source_index(**payload: str) -> str:
 
 def _engine(database_url: str) -> AsyncEngine:
     from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
 
-    return create_async_engine(database_url)
+    # One asyncio.run per delivery: pooled connections would stay bound to
+    # the first (closed) loop and crash on dispose.
+    return create_async_engine(database_url, poolclass=NullPool)
 
 
 async def index_payload(

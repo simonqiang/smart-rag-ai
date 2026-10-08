@@ -28,3 +28,16 @@ def test_worker_broker_uses_configured_redis_url(monkeypatch) -> None:
     parsed = urllib.parse.urlparse(Settings.load().redis_url)
     assert kwargs["host"] == parsed.hostname
     assert kwargs["port"] == parsed.port or 6379
+
+
+def test_actor_engines_use_null_pool_for_loop_safety() -> None:
+    # Actors run one asyncio.run per delivery; pooled connections would stay
+    # bound to the first (closed) loop and crash on dispose.
+    from sqlalchemy.pool import NullPool
+
+    from apps.worker.tasks.extract import _engine as extract_engine
+    from apps.worker.tasks.index import _engine as index_engine
+
+    for build in (extract_engine, index_engine):
+        engine = build("postgresql+asyncpg://user:pw@localhost/db")
+        assert isinstance(engine.pool, NullPool)

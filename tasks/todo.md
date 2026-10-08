@@ -117,7 +117,9 @@ These are master work packages. Before implementation, any package larger than o
 
 ### Checkpoint B — Private alpha
 
-- [ ] Upload-to-cited-answer works with Ollama in English, Chinese, and Malay on phone, tablet, and desktop.
+- [x] Upload-to-cited-answer works with Ollama in English, Chinese, and Malay on phone, tablet, and desktop.
+  - Verified 2026-10-08 on the live Compose stack: three uploads indexed through the real dispatcher/worker (bge-m3), then /api/ask over SSE answered in English, zh-Hans, and Malay, each with validated citations to the matching source; Playwright live spec (e2e/live-ask.spec.ts, guarded by SMART_RAG_LIVE_URL) passed sign-in → ask → citation-open on Pixel 7 portrait, iPad Mini landscape, and Desktop Chrome with no console errors or overflow.
+  - Findings fixed on the way: worker broker ignored settings (dramatiq default), outbox relay was never wired, uploads never enqueued extraction, extraction never chained indexing, plainto_tsquery AND-semantics zeroed the Chinese keyword channel, and qwen3 thinking stalled CPU generation. Deferred to Task 27: model declinations without citation markers surface as malformed_answer error frames, and the confidence threshold needs evaluation-driven tuning (the OR keyword channel admits weak double-channel matches).
 
 ## Phase 4 — Knowledge lifecycle
 
