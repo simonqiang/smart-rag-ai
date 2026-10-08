@@ -358,6 +358,7 @@ def test_rewriter_runs_before_retrieval_with_bounded_history(workspace) -> None:
 
     rewriter = RecordingRewriter()
     ask_routes._rewriter = rewriter
+    assert ask_routes.rewriter() is rewriter  # the seam accessor exposes it
     try:
         with TestClient(api.app) as client:
             _sign_in(client)
@@ -376,6 +377,23 @@ def test_rewriter_runs_before_retrieval_with_bounded_history(workspace) -> None:
     # Retrieval embedded the rewritten queries, in order (indexing used other fakes).
     assert workspace["fake_embeddings"].requests[0] == ["rewritten(first question)"]
     assert workspace["fake_embeddings"].requests[1] == ["rewritten(second question)"]
+
+
+def test_a_blank_rewrite_maps_to_empty_query_400(workspace) -> None:
+    class BlankRewriter:
+        def rewrite(self, question: str, history) -> str:
+            return "   "
+
+    ask_routes._rewriter = BlankRewriter()
+    try:
+        with TestClient(api.app) as client:
+            _sign_in(client)
+            response = client.post("/api/ask", json={"question": SHARED_TEXT})
+    finally:
+        ask_routes._rewriter = None
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "query is empty"
 
 
 def test_unknown_conversation_maps_to_generic_404(workspace) -> None:

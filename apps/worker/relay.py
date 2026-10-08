@@ -29,9 +29,9 @@ async def _loop(engine, broker) -> None:
     dispatcher = JobDispatcher(engine, broker)
     while True:
         try:
+            # CancelledError is a BaseException: it passes the handler below
+            # and shuts the loop down cleanly.
             await dispatcher.relay()
-        except asyncio.CancelledError:
-            raise
         except Exception:
             logger.exception("outbox relay failed; retrying")
         await asyncio.sleep(POLL_SECONDS)

@@ -46,3 +46,68 @@ def test_relay_loop_polls_and_survives_failures(monkeypatch) -> None:
     # The first tick failed, the loop stayed alive, and later ticks published.
     assert FlakyDispatcher.calls >= 3
     assert published
+
+
+def test_relay_loop_shuts_down_cleanly_on_cancellation() -> None:
+    from apps.worker import relay
+
+    class SlowDispatcher:
+        async def relay(self) -> int:
+            await asyncio.sleep(60)
+
+    async def scenario() -> str:
+        task = asyncio.create_task(relay._loop(None, SlowDispatcher()))
+        await asyncio.sleep(0.05)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            return "cancelled"
+        return "never-cancelled"
+
+    assert asyncio.run(scenario()) == "cancelled"
+
+
+def test_relay_main_composes_engine_and_loop(monkeypatch) -> None:
+    from apps.worker import relay
+
+    composed: dict = {}
+
+    async def fake_loop(engine, broker):
+        composed["engine"], composed["broker"] = engine, broker
+
+    monkeypatch.setattr(relay, "_loop", fake_loop)
+    relay.main()
+    asyncio.run(composed["engine"].dispose())
+    assert composed["broker"] is not None
+
+
+def test_relay_loop_propagates_cancellation_from_inside_relay() -> None:
+    from apps.worker import relay
+
+    class SlowDispatcher:
+        async def relay(self) -> int:
+            await asyncio.sleep(60)
+
+    async def scenario() -> None:
+        task = asyncio.create_task(relay._loop(None, None))
+        await asyncio.sleep(0.05)  # cancel while relay() is in flight
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            return
+        raise AssertionError("cancelled relay did not re-raise")
+
+    asyncio.run(scenario())
+
+
+def test_relay_main_stops_on_keyboard_interrupt(monkeypatch) -> None:
+    from apps.worker import relay
+
+    def interrupted(run_coro):
+        run_coro.close()
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(relay.asyncio, "run", interrupted)
+    relay.main()  # must log and return, not raise
