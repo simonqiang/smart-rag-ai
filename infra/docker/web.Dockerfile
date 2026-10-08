@@ -8,3 +8,4 @@ RUN npm run build -w apps/web
 
 FROM nginx:alpine
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+COPY infra/docker/web.nginx.conf /etc/nginx/conf.d/default.conf

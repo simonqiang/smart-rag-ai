@@ -1,12 +1,19 @@
 """Shared fixtures for ingestion integration tests (live Compose PostgreSQL)."""
 
 import asyncio
+from pathlib import Path
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from foundation.config import Settings
+from foundation.events import EventWriter
+from foundation.storage import ObjectStore
+from foundation.unit_of_work import UnitOfWork
+from identity_access.authorization import AccessContext
+from identity_access.setup import create_first_owner
+from source_catalog.catalog import create_collection
 
 INGESTION_TABLES = (
     "source_versions, sources, collections, invitations, sessions, users, workspaces"
@@ -40,3 +47,35 @@ def db(_migrated, settings: Settings) -> Settings:
 
     asyncio.run(reset())
     return settings
+
+
+@pytest.fixture()
+def store_root(db: Settings, tmp_path: Path) -> Path:
+    return tmp_path / "store"
+
+
+@pytest.fixture()
+def workspace(db: Settings, store_root) -> dict:
+    """Owner plus one collection; objects are stored under ``store_root``."""
+
+    async def create() -> dict:
+        engine = create_async_engine(db.database_url)
+        uow = UnitOfWork(engine)
+        ObjectStore(store_root)
+        try:
+            owner = await create_first_owner(
+                uow, EventWriter(), email="owner@example.com", password="owner-password-1"
+            )
+            collection = await create_collection(
+                uow, EventWriter(),
+                context=AccessContext(
+                    user_id=owner.user_id, workspace_id=owner.workspace_id, role="owner"
+                ),
+                name="Policies",
+            )
+        finally:
+            await engine.dispose()
+        return {"workspace_id": owner.workspace_id, "owner_id": owner.user_id,
+                "collection_id": collection.collection_id}
+
+    return asyncio.run(create())

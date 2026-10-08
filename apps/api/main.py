@@ -22,13 +22,18 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
+from ai_providers.contracts import ProviderError
+from apps.api.routes import ask as ask_routes
 from apps.api.routes import auth as auth_routes
+from apps.api.routes import conversations as conversation_routes
+from apps.api.routes import search as search_routes
 from apps.api.routes import sources as source_routes
 from apps.api.routes import uploads as upload_routes
 from apps.api.routes import users as user_routes
 from foundation.config import Settings
 from identity_access.authorization import AccessDenied
 from identity_access.grants import TargetNotFound
+from retrieval_answering.retrieval import EmptyQueryError
 from source_catalog.catalog import CollectionNotFound, SourceNotFound
 
 correlation_id: ContextVar[str] = ContextVar("correlation_id", default="-")
@@ -128,6 +133,9 @@ app.include_router(auth_routes.router)
 app.include_router(user_routes.router)
 app.include_router(source_routes.router)
 app.include_router(upload_routes.router)
+app.include_router(search_routes.router)
+app.include_router(ask_routes.router)
+app.include_router(conversation_routes.router)
 
 
 @app.exception_handler(TargetNotFound)
@@ -152,6 +160,22 @@ async def _collection_not_found(
 @app.exception_handler(AccessDenied)
 async def _access_denied(_request: Request, _exc: AccessDenied) -> JSONResponse:
     return JSONResponse(status_code=403, content={"detail": "not allowed"})
+
+
+@app.exception_handler(EmptyQueryError)
+async def _empty_query(_request: Request, _exc: EmptyQueryError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": "query is empty"})
+
+
+@app.exception_handler(ProviderError)
+async def _provider_unavailable(_request: Request, exc: ProviderError) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": f"AI provider unavailable ({exc.reason}); "
+                      "check the model host and retry"
+        },
+    )
 
 
 @app.middleware("http")

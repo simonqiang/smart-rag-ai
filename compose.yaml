@@ -77,6 +77,28 @@ services:
       redis:
         condition: service_healthy
 
+  dispatcher:
+    build:
+      context: .
+      dockerfile: infra/docker/app.Dockerfile
+    command: python -m apps.worker.relay
+    environment:
+      SMART_RAG_DATABASE_URL: postgresql+asyncpg://smart_rag:${SMART_RAG_DB_PASSWORD:-smart-rag-local}@postgres:5432/smart_rag
+      SMART_RAG_REDIS_URL: redis://redis:6379/0
+      SMART_RAG_OLLAMA_HOST: http://host.docker.internal:11434
+      SMART_RAG_DATA_DIR: /data
+      SMART_RAG_BACKUP_DIR: /backups
+    volumes:
+      - ./data:/data
+      - ./backups:/backups
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   web:
     build:
       context: .

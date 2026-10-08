@@ -8,16 +8,20 @@ SIGTERM by draining in-flight messages.
 from __future__ import annotations
 
 import dramatiq
-from dramatiq.brokers.redis import RedisBroker
 
-from foundation.config import Settings
+from apps.worker.broker import build_broker
 
-_settings = Settings.load()
-
-if not isinstance(dramatiq.get_broker(), RedisBroker):
-    dramatiq.set_broker(RedisBroker(url=_settings.redis_url))
+# dramatiq materializes its own default RedisBroker (localhost, unconfigured)
+# before this module loads; always replace it with the settings-configured one.
+dramatiq.set_broker(build_broker())
 
 broker = dramatiq.get_broker()
+
+# Importing registers the actors with the broker.
+from apps.worker.tasks import (
+    extract,  # noqa: F401
+    index,  # noqa: F401
+)
 
 
 @dramatiq.actor(max_retries=0)

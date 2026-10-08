@@ -1,6 +1,7 @@
 import AppShell from "./AppShell";
 import SetupPage from "./features/auth/SetupPage";
 import SignInPage from "./features/auth/SignInPage";
+import AskPage from "./features/ask/AskPage";
 import UserAccessPage from "./features/settings/UserAccessPage";
 import SourceListPage from "./features/sources/SourceListPage";
 import { navigate, usePath } from "./router";
@@ -9,6 +10,12 @@ function App() {
   const path = usePath();
   if (path === "/setup") return <SetupPage />;
   if (path === "/signin") return <SignInPage />;
+  if (path === "/ask")
+    return (
+      <AppShell>
+        <AskPage />
+      </AppShell>
+    );
   if (path === "/users")
     return (
       <AppShell>

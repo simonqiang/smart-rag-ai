@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from sqlalchemy import text
 
 from foundation.events import AuditEvent, EventWriter
+from foundation.jobs import JobCommand, JobQueue
 from foundation.storage import ObjectStore
 from foundation.unit_of_work import UnitOfWork
 from identity_access.authorization import (
@@ -175,6 +176,16 @@ async def register_upload(
                     "media_type": media_type,
                     "filename": filename,
                 },
+            ),
+            transaction,
+        )
+        # Extraction dispatches only from this committed outbox row; the
+        # idempotency key dedupes a redelivered upload transaction.
+        await JobQueue().enqueue(
+            JobCommand(
+                type="source_extract",
+                payload={"version_id": version_id, "source_id": source_id},
+                idempotency_key=f"source_extract:{version_id}",
             ),
             transaction,
         )

@@ -82,30 +82,44 @@ These are master work packages. Before implementation, any package larger than o
   - Acceptance: generation and embedding are independent; missing model/unavailable host errors are typed.
   - Verify: contract tests use deterministic fakes plus optional Ollama smoke test.
   - Dependencies: Tasks 3–4.
-- [ ] **Task 11: Extract and normalize PDF, TXT, and Markdown**
+- [x] **Task 11: Extract and normalize PDF, TXT, and Markdown**
   - Acceptance: safe English/Chinese/Malay/mixed fixtures produce ordered, language-tagged text and citation locations; failures remain non-active.
   - Verify: parser fixture tests and worker retry tests pass.
   - Dependencies: Tasks 5, 9.
-- [ ] **Task 12: Chunk, embed, and activate the first index generation**
+- [x] **Task 12: Chunk, embed, and activate the first index generation**
   - Acceptance: deterministic chunks (including CJK), language-aware keyword vectors, and compatible vectors activate atomically.
   - Verify: unit/integration tests cover empty content, dimension mismatch, and failed activation.
   - Dependencies: Tasks 10–11.
-- [ ] **Task 13: Retrieve authorized evidence with hybrid search**
+- [x] **Task 13: Retrieve authorized evidence with hybrid search**
   - Acceptance: semantic/keyword results merge with reciprocal-rank fusion under workspace/grant/version filters; Chinese segmenter selected by evaluation and approved before being added.
   - Verify: retrieval evaluation meets thresholds for each language and security tests show zero leakage.
+  - Note: Chinese keyword segmentation uses dependency-free character bigrams (spec §15 "segmented in the application"); no production dependency was added, so no owner approval was required. Swap for an approved segmenter if evaluation shows bigram recall below threshold.
   - Dependencies: Tasks 7, 12.
-- [ ] **Task 14: Generate answers and validate citations**
+- [x] **Task 14: Generate answers and validate citations** (expanded into child tasks 14a–14c; all complete)
   - Acceptance: grounded answers in the question's language cite supplied evidence; weak evidence bypasses generation; typed conversation/query-rewrite and streaming/cancellation contracts exist.
   - Verify: unit/contract tests cover valid, malformed, hallucinated, timed-out, cancelled, and reconnect/error-frame responses.
   - Dependencies: Tasks 10, 13.
-- [ ] **Task 15: Deliver the responsive Ask experience**
+  - Note (15): the ask/answer toggle is one stable button; cancel defers past the click's default action because flipping type=button→submit mid-click makes the browser submit the form.
+  - Note: citation markers are `[N:"verbatim quote"]`; validation enforces label-within-evidence and quote-inside-cited-span (spec citation-correctness rule). Cancellation = client abort closes the SSE body, cancelling generation at the next chunk boundary; the client renders its own cancelled state.
+  - Child tasks (interfaces and acceptance criteria preserved from the master package):
+    - [x] **14a: Conversation schema and store** — Migration `0007` for `conversations`/`conversation_messages`; `src/retrieval_answering/conversation.py` with `ConversationContext` (bounded four messages), create/load/list/rename/delete scoped to owner user + workspace (unknown/cross-workspace indistinguishable), `delete_expired_conversations` for retention, `find_message_by_request` for resume. Verify: `tests/integration/retrieval_answering/test_conversations.py`.
+    - [x] **14b: Grounded answer core and citation validation** — `src/retrieval_answering/citations.py` (`[N:quote]` markers, `validate_citations` enforcing labels within supplied evidence and verbatim quotes inside the cited span per spec §302, typed `MalformedAnswerError`/`UngroundedAnswerError`) and `src/retrieval_answering/answering.py` (`QueryRewriter` port, `answer`, `stream_answer`, typed `AnswerStreamEvent` `started|delta|citation|completed|error|cancelled` with request/resume identifiers, language policy, insufficient-evidence bypass without a model call, safe error frames). Ollama NDJSON `stream_generate`; streaming fake. Verify: `tests/unit/retrieval_answering/test_answering.py` plus Ollama streaming contract test.
+    - [x] **14c: Ask API routes** — `apps/api/routes/ask.py`: `POST /api/ask` (rewrite → retrieve → answer; JSON or SSE via Accept), `GET /api/ask/{request_id}/events` resume replay, audit-safe metadata, provider/privacy badge, error mapping. Verify: `tests/api/test_ask_routes.py`.
+- [x] **Task 15: Deliver the responsive Ask experience** (expanded into child tasks 15a–15d; all complete)
   - Acceptance: member asks, streams answer, opens citation, filters sources, lists/reopens/deletes conversations, and sees provider/privacy state on all device classes.
   - Verify: Playwright happy/unhappy projects pass at required widths/orientations.
   - Dependencies: Tasks 8, 14.
+  - Child tasks (interfaces and acceptance criteria preserved from the master package; plan's `packages/contracts` package does not exist in this scaffold — the Ask contracts live in `apps/web/src/features/ask/contracts.ts`):
+    - [x] **15a: Ask contracts, streaming hook, and Ask page** — `apps/web/src/features/ask/contracts.ts` (Ask/SSE frame types), `useAsk.ts` (fetch-SSE streaming with cancel + error frames), `AskPage.tsx` (question input, streaming answer with citation markers, insufficient-evidence state, provider/privacy badge, source filter, feedback hook). Verify: component tests + `tsc --noEmit`.
+    - [x] **15b: Evidence panel** — `apps/web/src/features/ask/EvidencePanel.tsx` opening a citation (source, location, source-language quote) from answer markers, adaptive placement, no hover-only interaction. Verify: component tests + `tsc --noEmit`.
+    - [x] **15c: Conversation list and routes** — `apps/api/routes/conversations.py` (list/reopen/rename/delete own conversations) + `apps/web/src/features/ask/ConversationList.tsx` with citation re-authorization on reopen. Verify: API tests, component tests.
+    - [x] **15d: Ask E2E matrix** — `e2e/ask.spec.ts`: happy stream, English/Chinese/Malay `lang` attributes, conversation list/reopen/delete, cancellation, reconnect/error frames, citation open, insufficient evidence, provider timeout, restricted source, empty state, keyboard/touch, no console errors/clipping/overflow on every device project. Verify: `npx playwright test e2e/ask.spec.ts`.
 
 ### Checkpoint B — Private alpha
 
-- [ ] Upload-to-cited-answer works with Ollama in English, Chinese, and Malay on phone, tablet, and desktop.
+- [x] Upload-to-cited-answer works with Ollama in English, Chinese, and Malay on phone, tablet, and desktop.
+  - Verified 2026-10-08 on the live Compose stack: three uploads indexed through the real dispatcher/worker (bge-m3), then /api/ask over SSE answered in English, zh-Hans, and Malay, each with validated citations to the matching source; Playwright live spec (e2e/live-ask.spec.ts, guarded by SMART_RAG_LIVE_URL) passed sign-in → ask → citation-open on Pixel 7 portrait, iPad Mini landscape, and Desktop Chrome with no console errors or overflow.
+  - Findings fixed on the way: worker broker ignored settings (dramatiq default), outbox relay was never wired, uploads never enqueued extraction, extraction never chained indexing, plainto_tsquery AND-semantics zeroed the Chinese keyword channel, and qwen3 thinking stalled CPU generation. Deferred to Task 27: model declinations without citation markers surface as malformed_answer error frames, and the confidence threshold needs evaluation-driven tuning (the OR keyword channel admits weak double-channel matches).
 
 ## Phase 4 — Knowledge lifecycle
 

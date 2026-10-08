@@ -147,6 +147,18 @@ def _embedding_provider(host: str, timeout: float = 30) -> OllamaEmbeddingProvid
     return OllamaEmbeddingProvider(host, model="bge-m3", expected_dimensions=4, timeout=timeout)
 
 
+def test_generation_disables_thinking_for_reasoning_models(stub_ollama) -> None:
+    # qwen3 thinks by default; on CPU that burns minutes before the first
+    # visible token. The adapter opts out explicitly.
+    def handler(request: dict) -> tuple[int, dict]:
+        return 200, {"response": "ok"}
+
+    server = stub_ollama(handler)
+    _generation_provider(server.host).generate(GenerationRequest(prompt="hi"))
+
+    assert server.requests[0]["think"] is False
+
+
 def test_generation_returns_text_and_keeps_streaming_off(stub_ollama) -> None:
     def handler(request: dict) -> tuple[int, dict]:
         return 200, {"response": "grounded answer"}
@@ -380,3 +392,163 @@ def test_embeddings_missing_payload_is_invalid(stub_ollama) -> None:
 
     with pytest.raises(InvalidProviderResponseError):
         _embedding_provider(stub_ollama(handler).host).embed(["one"])
+
+
+# --- streaming generation (Task 14b) --------------------------------------
+
+
+def _ndjson(lines: list[dict]) -> bytes:
+    return b"".join(json.dumps(line).encode() + b"\n" for line in lines)
+
+
+def test_stream_generate_yields_chunks_skips_empty_and_stops_at_done(stub_ollama) -> None:
+    def handler(request: dict) -> tuple[int, bytes]:
+        return 200, _ndjson([
+            {"response": "He", "done": False},
+            {"response": "", "done": False},
+            {"response": "llo", "done": False},
+            {"response": "", "done": True},
+        ])
+
+    server = stub_ollama(handler)
+    chunks = list(_generation_provider(server.host).stream_generate(
+        GenerationRequest(prompt="hi", system="be brief")  # system must reach the payload
+    ))
+
+    assert chunks == ["He", "llo"]
+    assert server.requests[0]["stream"] is True
+    assert server.requests[0]["system"] == "be brief"
+
+
+def test_stream_skips_blank_lines_and_ends_cleanly_without_done(stub_ollama) -> None:
+    def handler(request: dict) -> tuple[int, bytes]:
+        return 200, _ndjson([{"response": "a", "done": False}]) + b"\n" + _ndjson([
+            {"response": "b", "done": False},
+        ])
+
+    provider = _generation_provider(stub_ollama(handler).host)
+    lines = list(provider._http.stream("/api/generate", {"prompt": "hi"}, "qwen3:8b"))
+
+    assert [line["response"] for line in lines] == ["a", "b"]
+
+
+def test_stream_read_timeout_is_typed_timeout() -> None:
+    class StallHandler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "64")
+            self.end_headers()
+            self.wfile.write(b'{"resp')
+            self.wfile.flush()
+            time.sleep(1.5)  # client (timeout=0.25s) stalls mid-body
+            self.wfile.write(b'onse": "x"}' + b" " * 50)
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    with _serve(StallHandler) as host:
+        provider = OllamaGenerationProvider(host, model="qwen3:8b", timeout=0.25)
+        with pytest.raises(ProviderUnavailableError) as excinfo:
+            list(provider.stream_generate(GenerationRequest(prompt="q")))
+
+    assert excinfo.value.reason == "timeout"
+
+
+def test_stream_connection_reset_mid_body_is_unreachable() -> None:
+    class ResetHandler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "64")
+            self.end_headers()
+            self.wfile.write(b'{"resp')
+            self.wfile.flush()
+            # Hard-reset (RST, not EOF) so the client read fails mid-body.
+            self.connection.setsockopt(
+                socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0)
+            )
+            self.connection.close()
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    with _serve(ResetHandler) as host, pytest.raises(ProviderUnavailableError) as excinfo:
+        list(OllamaGenerationProvider(host, model="qwen3:8b").stream_generate(
+            GenerationRequest(prompt="q")
+        ))
+
+    assert excinfo.value.reason == "unreachable"
+
+
+def test_stream_truncated_chunked_body_is_unreachable() -> None:
+    class ChunkedCutHandler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Transfer-Encoding", "chunked")
+            self.end_headers()
+            self.wfile.write(b'7\r\n{"resp')  # promise more chunks, then close cleanly
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    with _serve(ChunkedCutHandler) as host, pytest.raises(ProviderUnavailableError):
+        list(OllamaGenerationProvider(host, model="qwen3:8b").stream_generate(
+            GenerationRequest(prompt="q")
+        ))
+
+
+def test_open_maps_connection_dropped_without_response_to_unreachable() -> None:
+    class SilentHandler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            self.connection.close()  # accept, then drop without an HTTP response
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    with _serve(SilentHandler) as host, pytest.raises(ProviderUnavailableError) as excinfo:
+        OllamaGenerationProvider(host, model="qwen3:8b").generate(GenerationRequest(prompt="q"))
+
+    assert excinfo.value.reason == "unreachable"
+
+
+def test_stream_generate_non_string_chunk_is_invalid(stub_ollama) -> None:
+    def handler(request: dict) -> tuple[int, bytes]:
+        return 200, _ndjson([{"response": 5, "done": False}])
+
+    with pytest.raises(InvalidProviderResponseError):
+        list(_generation_provider(stub_ollama(handler).host).stream_generate(
+            GenerationRequest(prompt="hi")
+        ))
+
+
+def test_stream_generate_non_dict_line_is_invalid(stub_ollama) -> None:
+    def handler(request: dict) -> tuple[int, bytes]:
+        return 200, b"[1, 2]\n"
+
+    with pytest.raises(InvalidProviderResponseError):
+        list(_generation_provider(stub_ollama(handler).host).stream_generate(
+            GenerationRequest(prompt="hi")
+        ))
+
+
+def test_stream_generate_malformed_line_is_invalid(stub_ollama) -> None:
+    def handler(request: dict) -> tuple[int, bytes]:
+        return 200, b"not-json\n"
+
+    with pytest.raises(InvalidProviderResponseError):
+        list(_generation_provider(stub_ollama(handler).host).stream_generate(
+            GenerationRequest(prompt="hi")
+        ))
+
+
+def test_stream_generate_connection_refused_is_unreachable() -> None:
+    with pytest.raises(ProviderUnavailableError):
+        list(_generation_provider("http://127.0.0.1:1").stream_generate(
+            GenerationRequest(prompt="hi")
+        ))

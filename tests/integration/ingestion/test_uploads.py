@@ -14,16 +14,11 @@ from foundation.events import EventWriter
 from foundation.storage import ObjectStore
 from foundation.unit_of_work import UnitOfWork
 from identity_access.authorization import AccessContext, AccessDenied
-from identity_access.invitations import accept_invitation, issue_invitation_token
-from identity_access.setup import create_first_owner
 from ingestion.uploads import (
     UploadRejected,
     register_upload,
 )
-from source_catalog.catalog import CollectionNotFound, create_collection
-
-OWNER_EMAIL = "owner@example.com"
-MEMBER_EMAIL = "member@example.com"
+from source_catalog.catalog import CollectionNotFound
 
 VALID_PDF = b"%PDF-1.7 fake pdf body for testing"
 ENCRYPTED_PDF = b"%PDF-1.7 /Encrypt 4 0 R fake encrypted body"
@@ -40,42 +35,6 @@ def _run(settings: Settings, coro_factory, store_root: Path | None = None) -> ob
             await engine.dispose()
 
     return asyncio.run(run())
-
-
-@pytest.fixture()
-def store_root(db: Settings, tmp_path: Path) -> Path:
-    return tmp_path / "store"
-
-
-@pytest.fixture()
-def workspace(db: Settings, store_root: Path) -> dict:
-    async def create() -> dict:
-        engine = create_async_engine(db.database_url)
-        uow = UnitOfWork(engine)
-        ObjectStore(store_root)
-        try:
-            owner = await create_first_owner(uow, EventWriter(), email=OWNER_EMAIL, password="owner-password-1")
-            invite = await issue_invitation_token(
-                uow, EventWriter(), workspace_id=owner.workspace_id,
-                email=MEMBER_EMAIL, role="member", invited_by=owner.user_id,
-            )
-            await accept_invitation(uow, EventWriter(), token=invite.token, password="member-password-1")
-            collection = await create_collection(
-                uow, EventWriter(),
-                context=AccessContext(
-                    user_id=owner.user_id, workspace_id=owner.workspace_id, role="owner"
-                ),
-                name="Policies",
-            )
-        finally:
-            await engine.dispose()
-        return {
-            "workspace_id": owner.workspace_id,
-            "owner_id": owner.user_id,
-            "collection_id": collection.collection_id,
-        }
-
-    return asyncio.run(create())
 
 
 def _owner_context(workspace: dict) -> AccessContext:
@@ -221,3 +180,48 @@ def test_foreign_collection_refused(db, workspace, store_root) -> None:
         _upload(
             db, store_root, workspace, data=VALID_PDF, collection_id=str(uuid.uuid4())
         )
+
+
+def test_upload_enqueues_extraction_in_the_same_transaction(
+    db: Settings, store_root: Path, workspace: dict,
+) -> None:
+    """Upload-to-answer starts here: the committed upload must be dispatchable."""
+
+    async def reset() -> None:
+        engine = create_async_engine(db.database_url)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(text("TRUNCATE jobs, outbox"))
+        finally:
+            await engine.dispose()
+
+    asyncio.run(reset())
+
+    async def verify() -> tuple[list, list]:
+        engine = create_async_engine(db.database_url)
+        try:
+            async with engine.begin() as connection:
+                outbox = (
+                    await connection.execute(
+                        text("SELECT topic, payload FROM outbox WHERE topic = 'source_extract'")
+                    )
+                ).all()
+                jobs = (
+                    await connection.execute(
+                        text("SELECT type, status, idempotency_key FROM jobs")
+                    )
+                ).all()
+        finally:
+            await engine.dispose()
+        return outbox, jobs
+
+    accepted = _upload(db, store_root, workspace, data=b"checkpoint pipeline", filename="a.txt")
+    outbox, jobs = asyncio.run(verify())
+
+    assert len(outbox) == 1
+    topic, payload = outbox[0]
+    assert topic == "source_extract"
+    assert payload["version_id"] == accepted.source_version_id
+    assert payload["source_id"] == accepted.source_id
+    assert payload["job_id"]
+    assert jobs == [("source_extract", "pending", f"source_extract:{accepted.source_version_id}")]
