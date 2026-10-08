@@ -14,8 +14,9 @@ from foundation.config import Settings
 
 _settings = Settings.load()
 
-if not isinstance(dramatiq.get_broker(), RedisBroker):
-    dramatiq.set_broker(RedisBroker(url=_settings.redis_url))
+# dramatiq materializes its own default RedisBroker (localhost, unconfigured)
+# before this module loads; always replace it with the settings-configured one.
+dramatiq.set_broker(RedisBroker(url=_settings.redis_url))
 
 broker = dramatiq.get_broker()
 
