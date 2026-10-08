@@ -595,3 +595,43 @@ def test_worker_unknown_version_fails_job(db, workspace, store_root) -> None:
     payload = asyncio.run(enqueue())
 
     assert _worker(db, store_root, payload) == "missing_version"
+
+
+def test_extracted_version_chains_the_index_job(
+    db, workspace, store_root,
+) -> None:
+    """Extraction must dispatch indexing, or uploads stall half-processed."""
+
+    accepted = _upload(db, store_root, workspace, data=_pdf("multilingual"), filename="chain.pdf")
+    payload = _enqueue_and_payload(db, accepted, store_root)
+
+    async def clean_outbox() -> None:
+        engine = create_async_engine(db.database_url)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(text("DELETE FROM outbox WHERE topic = 'source_index'"))
+        finally:
+            await engine.dispose()
+
+    asyncio.run(clean_outbox())
+    assert _worker(db, store_root, payload) == "extracted"
+
+    async def chained() -> list:
+        engine = create_async_engine(db.database_url)
+        try:
+            async with engine.begin() as connection:
+                return (
+                    await connection.execute(
+                        text("SELECT topic, payload FROM outbox WHERE topic = 'source_index'")
+                    )
+                ).all()
+        finally:
+            await engine.dispose()
+
+    rows = asyncio.run(chained())
+    assert len(rows) == 1
+    topic, index_payload = rows[0]
+    assert topic == "source_index"
+    assert index_payload["version_id"] == accepted.source_version_id
+    assert index_payload["source_id"] == accepted.source_id
+    assert index_payload["job_id"]

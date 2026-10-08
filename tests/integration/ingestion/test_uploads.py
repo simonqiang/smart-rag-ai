@@ -180,3 +180,48 @@ def test_foreign_collection_refused(db, workspace, store_root) -> None:
         _upload(
             db, store_root, workspace, data=VALID_PDF, collection_id=str(uuid.uuid4())
         )
+
+
+def test_upload_enqueues_extraction_in_the_same_transaction(
+    db: Settings, store_root: Path, workspace: dict,
+) -> None:
+    """Upload-to-answer starts here: the committed upload must be dispatchable."""
+
+    async def reset() -> None:
+        engine = create_async_engine(db.database_url)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(text("TRUNCATE jobs, outbox"))
+        finally:
+            await engine.dispose()
+
+    asyncio.run(reset())
+
+    async def verify() -> tuple[list, list]:
+        engine = create_async_engine(db.database_url)
+        try:
+            async with engine.begin() as connection:
+                outbox = (
+                    await connection.execute(
+                        text("SELECT topic, payload FROM outbox WHERE topic = 'source_extract'")
+                    )
+                ).all()
+                jobs = (
+                    await connection.execute(
+                        text("SELECT type, status, idempotency_key FROM jobs")
+                    )
+                ).all()
+        finally:
+            await engine.dispose()
+        return outbox, jobs
+
+    accepted = _upload(db, store_root, workspace, data=b"checkpoint pipeline", filename="a.txt")
+    outbox, jobs = asyncio.run(verify())
+
+    assert len(outbox) == 1
+    topic, payload = outbox[0]
+    assert topic == "source_extract"
+    assert payload["version_id"] == accepted.source_version_id
+    assert payload["source_id"] == accepted.source_id
+    assert payload["job_id"]
+    assert jobs == [("source_extract", "pending", f"source_extract:{accepted.source_version_id}")]

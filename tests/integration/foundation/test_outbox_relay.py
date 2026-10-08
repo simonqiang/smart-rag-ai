@@ -1,141 +1,48 @@
-"""Outbox relay composition: committed rows reach the broker (Task 5).
+"""Outbox relay loop: poll cadence and failure survival (Task 5).
 
 The relay is the dispatch half of the job pipeline; without it, committed
-outbox rows queue forever (found live in Checkpoint B). These tests spy on
-the broker instead of reading Redis: the live stack's worker consumes the
-shared queue within one poll period, so queue depth is a race.
+outbox rows queue forever (found live in Checkpoint B). The loop runs
+against fakes: the live stack's dispatcher consumes the shared outbox
+within one poll period, so end-to-end assertions would race it. The
+commit->publish->mark composition is covered by the dispatcher tests.
 """
 
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
-import pytest
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine
-
-from foundation.config import Settings
-from foundation.jobs import JobCommand, JobQueue
-from foundation.unit_of_work import UnitOfWork
-
-ROOT = Path(__file__).resolve().parents[3]
+from apps.worker import relay
 
 
-@pytest.fixture(scope="module")
-def settings() -> Settings:
-    return Settings.load()
+def test_relay_loop_polls_and_survives_failures(monkeypatch) -> None:
+    published: list[str] = []
 
+    class FlakyDispatcher:
+        calls = 0
 
-@pytest.fixture(scope="module", autouse=True)
-def _migrated(settings: Settings):
-    from alembic import command
-    from alembic.config import Config
+        def __init__(self, engine, broker) -> None:
+            self.broker = broker
 
-    command.upgrade(Config(str(ROOT / "alembic.ini")), "head")
-
-
-@pytest.fixture()
-def db(_migrated, settings: Settings) -> Settings:
-    async def reset() -> None:
-        engine = create_async_engine(settings.database_url)
-        async with engine.begin() as connection:
-            await connection.execute(text("TRUNCATE jobs, outbox, audit_events"))
-        await engine.dispose()
-
-    asyncio.run(reset())
-    return settings
-
-
-class RecordingBroker:
-    def __init__(self) -> None:
-        self.messages: list = []
-
-    def enqueue(self, message) -> None:
-        self.messages.append(message)
-
-
-def test_relay_publishes_committed_outbox_rows(db: Settings) -> None:
-    async def scenario() -> tuple[list, int]:
-        from apps.worker.relay import POLL_SECONDS, _loop
-
-        engine = create_async_engine(db.database_url)
-        async with engine.begin() as connection:
-            await connection.execute(text("TRUNCATE jobs, outbox"))
-        broker = RecordingBroker()
-
-        async with UnitOfWork(engine).transaction() as transaction:
-            await JobQueue().enqueue(
-                JobCommand(type="source_extract", payload={"version_id": "v1"}),
-                transaction,
-            )
-
-        loop_task = asyncio.create_task(_loop(engine, broker))
-        try:
-            await asyncio.sleep(POLL_SECONDS * 2)
-            async with engine.begin() as connection:
-                unpublished = (
-                    await connection.execute(
-                        text("SELECT count(*) FROM outbox WHERE published_at IS NULL")
-                    )
-                ).scalar_one()
-        finally:
-            loop_task.cancel()
-            try:
-                await loop_task
-            except asyncio.CancelledError:
-                pass
-            await engine.dispose()
-        return broker.messages, unpublished
-
-    messages, unpublished = asyncio.run(scenario())
-    # The relay published the committed row and marked it; the topic is the
-    # actor name, which the real actors (`source_extract`, `source_index`) match.
-    assert [message.actor_name for message in messages] == ["source_extract"]
-    assert messages[0].kwargs["version_id"] == "v1"  # job_id added by the queue
-    assert unpublished == 0
-
-
-def test_relay_survives_outage_and_recovers(db: Settings) -> None:
-    """A failure inside the loop must not kill the relay."""
-
-    async def scenario() -> list:
-        from apps.worker.relay import POLL_SECONDS, _loop
-
-        engine = create_async_engine(db.database_url)
-        async with engine.begin() as connection:
-            await connection.execute(text("TRUNCATE jobs, outbox"))
-
-        class ExplodingBroker:
-            def enqueue(self, message) -> None:
+        async def relay(self) -> int:
+            FlakyDispatcher.calls += 1
+            if FlakyDispatcher.calls == 1:
                 raise RuntimeError("broker down")
+            self.broker.append(f"tick-{FlakyDispatcher.calls}")
+            published.append(f"tick-{FlakyDispatcher.calls}")
+            return 1
 
-        broken = ExplodingBroker()
-        healed = RecordingBroker()
-        loop_task = asyncio.create_task(_loop(engine, broken))
+    monkeypatch.setattr(relay, "JobDispatcher", FlakyDispatcher)
+
+    async def scenario() -> None:
+        task = asyncio.create_task(relay._loop(None, []))
+        await asyncio.sleep(relay.POLL_SECONDS * 4)
+        task.cancel()
         try:
-            async with UnitOfWork(engine).transaction() as transaction:
-                await JobQueue().enqueue(
-                    JobCommand(type="source_extract", payload={}), transaction
-                )
-            await asyncio.sleep(POLL_SECONDS * 2)  # first ticks fail...
-            # Heal: swap the broker and let a later tick publish.
-            loop_task.cancel()
-            try:
-                await loop_task
-            except asyncio.CancelledError:
-                pass
-            loop_task = asyncio.create_task(_loop(engine, healed))
-            await asyncio.sleep(POLL_SECONDS * 2)
-        finally:
-            loop_task.cancel()
-            try:
-                await loop_task
-            except asyncio.CancelledError:
-                pass
-            await engine.dispose()
-        return healed.messages
+            await task
+        except asyncio.CancelledError:
+            pass
 
-    messages = asyncio.run(scenario())
-    # The outbox row was never marked, so the healed relay publishes it.
-    assert [message.actor_name for message in messages] == ["source_extract"]
+    asyncio.run(scenario())
+    # The first tick failed, the loop stayed alive, and later ticks published.
+    assert FlakyDispatcher.calls >= 3
+    assert published

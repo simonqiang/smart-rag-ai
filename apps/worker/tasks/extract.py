@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from foundation.config import Settings
 from foundation.events import AuditEvent, EventWriter
-from foundation.jobs import JobClaims, Lease
+from foundation.jobs import JobClaims, JobCommand, JobQueue, Lease
 from foundation.storage import ObjectStore
 from ingestion.extraction import ExtractionFailed, SourceObject, extract
 
@@ -58,7 +58,7 @@ async def extract_version(engine: AsyncEngine, store: ObjectStore, payload: dict
         version = (
             await connection.execute(
                 text(
-                    "SELECT state, object_sha256, media_type, filename "
+                    "SELECT state, object_sha256, media_type, filename, source_id "
                     "FROM source_versions WHERE id = :id"
                 ),
                 {"id": payload["version_id"]},
@@ -96,6 +96,21 @@ async def extract_version(engine: AsyncEngine, store: ObjectStore, payload: dict
         {"blocks": len(document.blocks), "warnings": document.warnings},
         "source.extracted",
     )
+    # Chain indexing before completing the lease: a crash anywhere still
+    # converges, because redelivery short-circuits to already_extracted and
+    # the idempotency key dedupes the second enqueue.
+    async with engine.begin() as transaction:
+        await JobQueue().enqueue(
+            JobCommand(
+                type="source_index",
+                payload={
+                    "version_id": payload["version_id"],
+                    "source_id": str(version["source_id"]),
+                },
+                idempotency_key=f"source_index:{payload['version_id']}",
+            ),
+            transaction,
+        )
     await claims.complete(lease)
     return "extracted"
 
