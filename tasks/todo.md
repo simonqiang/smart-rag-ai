@@ -127,7 +127,7 @@ These are master work packages. Before implementation, any package larger than o
   - Acceptance: admins can archive/unarchive with immediate retrieval exclusion; old version stays active until validated cutover; rollback creates a new version; each transition is audited transactionally.
   - Verify: concurrency/integration tests prove no mixed or partial knowledge.
   - Dependencies: Tasks 9–14.
-- [ ] **Task 17: Permanently delete and verify source data**
+- [x] **Task 17: Permanently delete and verify source data**
   - Acceptance: owner-only deletion excludes immediately, invokes the Task 5 managed-backup purge port, purges manifests/vectors/citation snapshots, replaces affected assistant-message content with a deletion notice (other messages and conversation records remain), and records zero-count evidence with a transactional audit event.
   - Verify: security/integration/E2E tests cover denial, partial failure, and idempotent retry.
   - Dependencies: Task 16.

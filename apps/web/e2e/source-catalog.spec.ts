@@ -275,3 +275,38 @@ test("version history cuts over to a ready replacement", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Make active" })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 });
+
+test("owner deletion asks for confirmation and removes the source", async ({ page }) => {
+  await mockOwnerSession(page);
+  let deleted = false;
+  await page.route(sourcesRoute, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(deleted ? [] : [shared[0]]),
+    }),
+  );
+  await page.route("**/api/sources/s1", (route) => {
+    if (route.request().method() !== "DELETE") return route.fallback();
+    deleted = true;
+    return route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      body: JSON.stringify({ source_id: "s1", state: "deleted", deletion: "scheduled" }),
+    });
+  });
+  await page.goto("/sources");
+
+  await expect(page.getByText("Employee Handbook")).toBeVisible();
+  await page.getByRole("button", { name: "Delete…" }).click();
+  const confirm = page.getByRole("button", { name: "Delete forever" });
+  await expect(confirm).toBeVisible();
+  // The destructive step is explicit: "Keep" backs out without deleting.
+  await page.getByRole("button", { name: "Keep" }).click();
+  await expect(page.getByText("Employee Handbook")).toBeVisible();
+
+  await page.getByRole("button", { name: "Delete…" }).click();
+  await confirm.click();
+  await expect(page.getByText("No sources yet")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});

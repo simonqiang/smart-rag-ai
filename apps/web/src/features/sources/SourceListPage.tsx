@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import DeleteSourceDialog from "./DeleteSourceDialog";
 import UploadSource from "./UploadSource";
 import VersionHistory from "./VersionHistory";
 import { detailText, getJson, postJson } from "../auth/api";
@@ -97,6 +98,13 @@ export default function SourceListPage() {
                 </button>
               )}
               <VersionHistory sourceId={source.source_id} canManage={canUpload} />
+              {canUpload && source.state !== "deleted" && (
+                <DeleteSourceDialog
+                  sourceId={source.source_id}
+                  sourceName={source.name}
+                  onDeleted={load}
+                />
+              )}
             </li>
           ))}
         </ul>

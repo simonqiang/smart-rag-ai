@@ -19,6 +19,7 @@ broker = dramatiq.get_broker()
 
 # Importing registers the actors with the broker.
 from apps.worker.tasks import (
+    delete_source,  # noqa: F401
     extract,  # noqa: F401
     index,  # noqa: F401
 )
