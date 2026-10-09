@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from foundation.events import AuditEvent, EventWriter
 from foundation.jobs import JobCommand, JobQueue
@@ -182,13 +183,19 @@ async def activate_ready_version(
             ),
             {"source_id": source_id, "version_id": version_id},
         )
-        await transaction.execute(
-            text(
-                "UPDATE source_versions SET state = 'active', updated_at = now() "
-                "WHERE id = :version_id"
-            ),
-            {"version_id": version_id},
-        )
+        try:
+            await transaction.execute(
+                text(
+                    "UPDATE source_versions SET state = 'active', updated_at = now() "
+                    "WHERE id = :version_id"
+                ),
+                {"version_id": version_id},
+            )
+        except IntegrityError:
+            # A concurrent cutover of a sibling version committed first; the
+            # partial unique index refused the second promotion. Same contract
+            # as losing the row-lock race above: a clean conflict, not a 500.
+            raise VersionNotReady("active") from None
         await writer.record(
             AuditEvent(
                 type="source.version_activated",

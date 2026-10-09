@@ -619,6 +619,62 @@ def test_concurrent_cutover_admits_exactly_one_winner(db, workspace, store_root)
     assert _active_versions(db, workspace["source_id"]) == [replacement["version_id"]]
 
 
+def test_distinct_version_cutovers_race_translates_the_lost_race(
+    db, workspace, store_root,
+) -> None:
+    """A rival cutover that loses the single-active slot surfaces as
+    VersionNotReady (API 409), never a raw IntegrityError (API 500).
+
+    The winner's cutover is held open uncommitted, so the rival's demote
+    blocks on the active-version row, rechecks after the commit, finds
+    nothing to demote, and its promote hits the partial unique index."""
+    first = _run(db, _replacer(workspace, store_root, ready=True), store_root)
+    second = _run(db, _replacer(workspace, store_root, ready=True), store_root)
+
+    async def race() -> str:
+        engine_a = create_async_engine(db.database_url)
+        engine_b = create_async_engine(db.database_url)
+        outcome = "ok"
+
+        async def rival() -> None:
+            nonlocal outcome
+            try:
+                await activate_ready_version(
+                    UnitOfWork(engine_b), EventWriter(), context=_owner(workspace),
+                    source_id=workspace["source_id"], version_id=second["version_id"],
+                )
+            except VersionNotReady:
+                outcome = "lost"
+
+        try:
+            async with engine_a.begin() as winner:
+                await winner.execute(
+                    text(
+                        "UPDATE source_versions SET state = 'superseded', updated_at = now() "
+                        "WHERE source_id = :s AND state = 'active' AND id <> :v"
+                    ),
+                    {"s": workspace["source_id"], "v": first["version_id"]},
+                )
+                await winner.execute(
+                    text(
+                        "UPDATE source_versions SET state = 'active', updated_at = now() "
+                        "WHERE id = :v"
+                    ),
+                    {"v": first["version_id"]},
+                )
+                pending = asyncio.create_task(rival())
+                await asyncio.sleep(0.05)  # let the rival park in its blocked demote
+            await pending  # winner commits; the rival's promote now conflicts
+        finally:
+            await engine_a.dispose()
+            await engine_b.dispose()
+        return outcome
+
+    assert asyncio.run(race()) == "lost"
+    assert _active_versions(db, workspace["source_id"]) == [first["version_id"]]
+    assert _version_state(db, second["version_id"]) == "indexed"  # rival rolled back
+
+
 def test_rollback_creates_new_version_from_history(db, workspace, store_root) -> None:
     replacement = _run(db, _replacer(workspace, store_root, ready=True), store_root)
 
