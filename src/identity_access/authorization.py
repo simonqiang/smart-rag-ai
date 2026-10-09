@@ -30,6 +30,8 @@ MINIMUM_ROLE = {
     "invitation.revoke": "admin",
     "collection.create": "admin",
     "source.create": "admin",
+    "source.update": "admin",
+    "source.delete": "owner",
 }
 
 # Actions that may never target the actor themselves.

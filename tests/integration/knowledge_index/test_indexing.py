@@ -139,7 +139,7 @@ def test_activate_generation_flips_pointers_atomically(
 
     states, version_state, audits = _run(db, verify, store_root)
     assert states == ["active"]
-    assert version_state == "indexed"
+    assert version_state == "active"
     assert audits == ["source.index_activated"]
 
 
@@ -411,7 +411,7 @@ def test_worker_indexes_and_activates(db, workspace, indexed, store_root) -> Non
             ).scalar_one()
         return version_state, generation_state, job_status
 
-    assert _run(db, verify, store_root) == ("indexed", "active", "completed")
+    assert _run(db, verify, store_root) == ("active", "active", "completed")
 
 
 def test_worker_completed_delivery_is_idempotent(
@@ -562,7 +562,7 @@ def test_actor_composes_settings_store_and_pipeline(
             await engine.dispose()
         return version_state, job_status
 
-    assert asyncio.run(verify()) == ("indexed", "completed")
+    assert asyncio.run(verify()) == ("active", "completed")
 
 
 def test_worker_non_extracted_version_fails_job(

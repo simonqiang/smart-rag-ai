@@ -123,14 +123,15 @@ These are master work packages. Before implementation, any package larger than o
 
 ## Phase 4 — Knowledge lifecycle
 
-- [ ] **Task 16: Replace and roll back immutable source versions**
+- [x] **Task 16: Replace and roll back immutable source versions**
   - Acceptance: admins can archive/unarchive with immediate retrieval exclusion; old version stays active until validated cutover; rollback creates a new version; each transition is audited transactionally.
   - Verify: concurrency/integration tests prove no mixed or partial knowledge.
   - Dependencies: Tasks 9–14.
-- [ ] **Task 17: Permanently delete and verify source data**
+- [x] **Task 17: Permanently delete and verify source data**
   - Acceptance: owner-only deletion excludes immediately, invokes the Task 5 managed-backup purge port, purges manifests/vectors/citation snapshots, replaces affected assistant-message content with a deletion notice (other messages and conversation records remain), and records zero-count evidence with a transactional audit event.
   - Verify: security/integration/E2E tests cover denial, partial failure, and idempotent retry.
   - Dependencies: Task 16.
+  - Reverified 2026-10-09: `make check` passed (451 tests, 100% changed-line coverage, smoke device matrix). Tombstones cannot be reversed, replacement writes serialize with deletion, and incomplete purges can be retried; the durable backup adapter remains Task 24.
 - [ ] **Task 17A: Purge expired knowledge by retention policy**
   - Acceptance: owner sets retention; scheduled purge removes expired superseded versions, retired pages, unreferenced artifacts, and expired conversations through the Task 17 purge path, never touching active knowledge; candidates are claimed under lock and rechecked before every destructive step; each run audits counts only.
   - Verify: integration tests cover expiry, shortened retention, active-never-purged, purge-versus-rollback/activation/snapshot-reuse concurrency, partial failure/retry, and non-owner denial; Playwright smoke for the retention screen.

@@ -134,9 +134,16 @@ async def activate_generation(
             ),
             {"id": generation_id},
         )
+        # Lifecycle (Task 16): a source's first validated version becomes the
+        # live one immediately; a replacement stays 'indexed' (ready) until an
+        # explicit cutover promotes it, so the old version remains retrievable.
         await transaction.execute(
             text(
-                "UPDATE source_versions SET state = 'indexed', updated_at = now() "
+                "UPDATE source_versions SET state = CASE WHEN EXISTS ("
+                "  SELECT 1 FROM source_versions other"
+                "  WHERE other.source_id = source_versions.source_id"
+                "    AND other.state = 'active' AND other.id <> source_versions.id"
+                ") THEN 'indexed' ELSE 'active' END, updated_at = now() "
                 "WHERE id = :version"
             ),
             {"version": str(row["source_version_id"])},

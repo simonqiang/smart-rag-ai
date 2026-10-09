@@ -31,6 +31,7 @@ from source_catalog.catalog import (
     list_collections,
     list_sources,
 )
+from source_catalog.deletion import request_permanent_deletion
 
 router = APIRouter(prefix="/api")
 
@@ -101,6 +102,21 @@ async def source_detail(
         uow(), context=await catalog_context(user), source_id=source_id
     )
     return asdict(source)
+
+
+@router.delete("/sources/{source_id}", status_code=202)
+async def request_source_deletion(
+    request: Request,
+    source_id: str,
+    user: Annotated[AuthenticatedUser, Depends(ready_user)],
+) -> dict:
+    """Owner-only tombstone; the worker purge is scheduled via the outbox."""
+    _check_origin(request)
+    context = await catalog_context(user)
+    await request_permanent_deletion(
+        uow(), EventWriter(), context=context, source_id=source_id
+    )
+    return {"source_id": source_id, "state": "deleted", "deletion": "scheduled"}
 
 
 @router.post("/sources", status_code=201)

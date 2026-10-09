@@ -27,6 +27,7 @@ from apps.api.routes import ask as ask_routes
 from apps.api.routes import auth as auth_routes
 from apps.api.routes import conversations as conversation_routes
 from apps.api.routes import search as search_routes
+from apps.api.routes import source_versions as source_version_routes
 from apps.api.routes import sources as source_routes
 from apps.api.routes import uploads as upload_routes
 from apps.api.routes import users as user_routes
@@ -35,6 +36,7 @@ from identity_access.authorization import AccessDenied
 from identity_access.grants import TargetNotFound
 from retrieval_answering.retrieval import EmptyQueryError
 from source_catalog.catalog import CollectionNotFound, SourceNotFound
+from source_catalog.version_service import VersionNotReady
 
 correlation_id: ContextVar[str] = ContextVar("correlation_id", default="-")
 
@@ -132,6 +134,7 @@ app = FastAPI(title="Smart RAG AI", lifespan=_lifespan)
 app.include_router(auth_routes.router)
 app.include_router(user_routes.router)
 app.include_router(source_routes.router)
+app.include_router(source_version_routes.router)
 app.include_router(upload_routes.router)
 app.include_router(search_routes.router)
 app.include_router(ask_routes.router)
@@ -155,6 +158,13 @@ async def _collection_not_found(
     _request: Request, _exc: CollectionNotFound
 ) -> JSONResponse:
     return JSONResponse(status_code=404, content={"detail": "no such collection"})
+
+
+@app.exception_handler(VersionNotReady)
+async def _version_not_ready(_request: Request, _exc: VersionNotReady) -> JSONResponse:
+    return JSONResponse(
+        status_code=409, content={"detail": "source version is not in a cutover-ready state"}
+    )
 
 
 @app.exception_handler(AccessDenied)

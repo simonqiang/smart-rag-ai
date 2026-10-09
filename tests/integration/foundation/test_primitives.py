@@ -412,6 +412,36 @@ def test_failed_job_is_terminal_and_reports_token_validity(db: Settings) -> None
     assert asyncio.run(scenario()) == (True, "failed", True)
 
 
+def test_retry_releases_job_for_a_later_delivery(db: Settings) -> None:
+    async def scenario() -> tuple[bool, str, bool, bool]:
+        engine = create_async_engine(db.database_url)
+        claims = JobClaims(engine)
+        try:
+            job_id = await _enqueue(engine)
+            first = await claims.claim(job_id, lease_seconds=30)
+            assert isinstance(first, Lease)
+
+            released = await claims.retry(first)
+            async with engine.connect() as connection:
+                status = (
+                    await connection.execute(
+                        text("SELECT status FROM jobs WHERE id = CAST(:id AS uuid)"),
+                        {"id": str(job_id)},
+                    )
+                ).scalar_one()
+            second = await claims.claim(job_id, lease_seconds=30)
+            return (
+                released,
+                status,
+                isinstance(second, Lease),
+                isinstance(second, Lease) and second.token != first.token,
+            )
+        finally:
+            await engine.dispose()
+
+    assert asyncio.run(scenario()) == (True, "pending", True, True)
+
+
 def test_state_survives_reconnect_after_dependency_restart(db: Settings) -> None:
     """A fresh engine (simulated process restart) sees committed state."""
 

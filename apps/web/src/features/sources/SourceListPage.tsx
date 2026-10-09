@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 
+import DeleteSourceDialog from "./DeleteSourceDialog";
 import UploadSource from "./UploadSource";
-import { detailText, getJson } from "../auth/api";
+import VersionHistory from "./VersionHistory";
+import { detailText, getJson, postJson } from "../auth/api";
 
 type Source = {
   source_id: string;
@@ -22,6 +24,7 @@ export default function SourceListPage() {
   const [sources, setSources] = useState<Source[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [canUpload, setCanUpload] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -33,6 +36,23 @@ export default function SourceListPage() {
     }
     setSources(result.payload as unknown as Source[]);
   }, []);
+
+  const toggleArchive = useCallback(
+    async (sourceId: string, state: string) => {
+      setBusyId(sourceId);
+      setError(null);
+      const result = await postJson(
+        `/api/sources/${sourceId}/${state === "active" ? "archive" : "unarchive"}`, {},
+      );
+      setBusyId(null);
+      if (!result.ok) {
+        setError(detailText(result));
+        return;
+      }
+      await load();
+    },
+    [load],
+  );
 
   useEffect(() => {
     void load();
@@ -67,7 +87,24 @@ export default function SourceListPage() {
         <ul style={listStyle}>
           {sources.map((source) => (
             <li key={source.source_id} style={rowStyle}>
-              <strong>{source.name}</strong> · {source.state}
+              <strong>{source.name}</strong> · {source.state}{" "}
+              {canUpload && (source.state === "active" || source.state === "archived") && (
+                <button
+                  type="button"
+                  disabled={busyId !== null}
+                  onClick={() => void toggleArchive(source.source_id, source.state)}
+                >
+                  {source.state === "active" ? "Archive" : "Unarchive"}
+                </button>
+              )}
+              <VersionHistory sourceId={source.source_id} canManage={canUpload} />
+              {canUpload && source.state !== "deleted" && (
+                <DeleteSourceDialog
+                  sourceId={source.source_id}
+                  sourceName={source.name}
+                  onDeleted={load}
+                />
+              )}
             </li>
           ))}
         </ul>

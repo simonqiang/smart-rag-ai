@@ -175,6 +175,9 @@ class JobClaims:
     async def fail(self, lease: Lease) -> bool:
         return await self._finish(lease, "failed")
 
+    async def retry(self, lease: Lease) -> bool:
+        return await self._finish(lease, "pending")
+
     async def _finish(self, lease: Lease, status: str) -> bool:
         async with self._engine.begin() as connection:
             result = (

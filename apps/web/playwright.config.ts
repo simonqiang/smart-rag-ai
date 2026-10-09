@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const PORT = 4173;
+// Overridable so parallel worktrees on one machine cannot fight over 4173.
+const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 4173);
 
 const smoke = [
   { name: "smoke-mobile-portrait", ...devices["Pixel 7"] },
