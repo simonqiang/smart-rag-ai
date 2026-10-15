@@ -150,7 +150,8 @@ These are master work packages. Before implementation, any package larger than o
 
 ### Checkpoint C
 
-- [ ] Replacement, rollback, deletion, retention purge, and index migration invariants pass with 100% critical branch coverage.
+- [x] Replacement, rollback, deletion, retention purge, and index migration invariants pass with 100% critical branch coverage.
+  - Verified 2026-10-16: `make check` green (502 tests, per-module 96% gate, 100% diff coverage). Failed replacement keeps old knowledge active; cutover excludes it; deletion reaches verified zero residue with retryable incomplete purges; retention purge removes expired superseded/retired versions, unreferenced artifacts, and stale conversations without touching active knowledge; rebuild cutover serializes with deletion and version activation through the per-workspace advisory lock.
 
 ## Phase 5 — Ingestion breadth and websites
 
