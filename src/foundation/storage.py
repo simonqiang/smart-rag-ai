@@ -42,6 +42,14 @@ class ObjectStore:
         (self._root / "manifests" / f"{address}.json").unlink(missing_ok=True)
         (self._root / "objects" / address).unlink(missing_ok=True)
 
+    def addresses(self) -> list[str]:
+        """Stored object addresses (retention artifact scan, Task 17A)."""
+        return [path.name for path in (self._root / "objects").iterdir() if path.is_file()]
+
+    def age(self, address: str) -> float:
+        """Object write time as a POSIX timestamp (local filesystem clock)."""
+        return (self._root / "objects" / address).stat().st_mtime
+
     def _write_manifest(self, address: str, data: bytes) -> None:
         manifest = {
             "sha256": address,

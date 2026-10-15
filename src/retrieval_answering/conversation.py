@@ -273,12 +273,18 @@ async def delete_conversation(
         )
 
 
-async def delete_expired_conversations(uow: UnitOfWork, *, cutoff: datetime) -> int:
+async def delete_expired_conversations(
+    uow: UnitOfWork, *, cutoff: datetime, workspace_id: str | None = None,
+) -> int:
     """Retention hook for Task 17A: removes conversations idle past ``cutoff``."""
     async with uow.transaction() as transaction:
         result = await transaction.execute(
-            text("DELETE FROM conversations WHERE updated_at < :cutoff"),
-            {"cutoff": cutoff},
+            text(
+                "DELETE FROM conversations WHERE updated_at < :cutoff "
+                "AND (CAST(:workspace_id AS uuid) IS NULL "
+                "OR workspace_id = CAST(:workspace_id AS uuid))"
+            ),
+            {"cutoff": cutoff, "workspace_id": workspace_id},
         )
     return result.rowcount
 
