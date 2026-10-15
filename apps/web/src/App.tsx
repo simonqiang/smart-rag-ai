@@ -3,6 +3,7 @@ import SetupPage from "./features/auth/SetupPage";
 import SignInPage from "./features/auth/SignInPage";
 import AskPage from "./features/ask/AskPage";
 import UserAccessPage from "./features/settings/UserAccessPage";
+import RetentionSettings from "./features/settings/RetentionSettings";
 import SourceListPage from "./features/sources/SourceListPage";
 import { navigate, usePath } from "./router";
 
@@ -20,6 +21,12 @@ function App() {
     return (
       <AppShell>
         <UserAccessPage />
+      </AppShell>
+    );
+  if (path === "/settings/retention")
+    return (
+      <AppShell>
+        <RetentionSettings />
       </AppShell>
     );
   if (path === "/sources")

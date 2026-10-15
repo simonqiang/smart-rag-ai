@@ -20,6 +20,7 @@ const links = [
   { href: "/ask", label: "Ask" },
   { href: "/sources", label: "Sources" },
   { href: "/users", label: "User access" },
+  { href: "/settings/retention", label: "Retention" },
 ];
 
 /** Responsive application shell: wrap-around navigation for signed-in pages. */
