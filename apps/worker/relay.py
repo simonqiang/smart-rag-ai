@@ -13,22 +13,45 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC, date, datetime
 
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from apps.worker.broker import build_broker
 from foundation.config import Settings
-from foundation.jobs import JobDispatcher
+from foundation.jobs import JobCommand, JobDispatcher, JobQueue
 
 POLL_SECONDS = 1.0
 
 logger = logging.getLogger("apps.worker.relay")
 
 
+async def schedule_daily_retention_purge(engine: AsyncEngine) -> date:
+    """Enqueue today's retention purge from a committed outbox row.
+
+    The idempotency key makes this once per UTC day no matter how often the
+    relay restarts; the job itself is idempotent (Task 17A).
+    """
+    today = datetime.now(UTC).date()
+    async with engine.begin() as connection:
+        await JobQueue().enqueue(
+            JobCommand(
+                type="retention_purge",
+                payload={},
+                idempotency_key=f"retention_purge:{today.isoformat()}",
+            ),
+            connection,
+        )
+    return today
+
+
 async def _loop(engine, broker) -> None:
     dispatcher = JobDispatcher(engine, broker)
+    scheduled: date | None = None
     while True:
         try:
+            if datetime.now(UTC).date() != scheduled:
+                scheduled = await schedule_daily_retention_purge(engine)
             # CancelledError is a BaseException: it passes the handler below
             # and shuts the loop down cleanly.
             await dispatcher.relay()

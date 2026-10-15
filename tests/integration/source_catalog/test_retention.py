@@ -624,3 +624,94 @@ def test_counts_only_audit_event_per_run(db, workspace, store_root) -> None:
 def test_run_on_empty_database_is_a_noop(db, tmp_path: Path) -> None:
     evidence = _purge(db, tmp_path / "store")
     assert evidence == {"versions": 0, "artifacts": 0, "conversations": 0}
+
+
+def test_worker_actor_claims_and_completes(db, workspace, store_root, monkeypatch) -> None:
+    from apps.worker.tasks import retention_purge as task_module
+    from foundation.jobs import JobCommand, JobQueue
+
+    victim = _upload(db, workspace, store_root, name="old", state="superseded", age_days=40)
+    _upload(db, workspace, store_root, name="new", state="active")
+    _age_artifacts(store_root)
+
+    async def seed() -> str:
+        engine = create_async_engine(Settings.load().database_url)
+        try:
+            async with engine.begin() as connection:
+                return str(await JobQueue().enqueue(
+                    JobCommand(
+                        type="retention_purge", payload={},
+                        idempotency_key="retention_purge:test-day",
+                    ),
+                    connection,
+                ))
+        finally:
+            await engine.dispose()
+
+    job_id = asyncio.run(seed())
+    monkeypatch.setattr(task_module, "ObjectStore", lambda _root: ObjectStore(store_root))
+
+    assert task_module.retention_purge(job_id=job_id) == "purged:1"
+    assert _counts(
+        db, "SELECT count(*) FROM source_versions WHERE id = :id", {"id": victim},
+    ) == 0
+    assert _counts(
+        db, "SELECT count(*) FROM jobs WHERE id = :id AND status = 'completed'", {"id": job_id},
+    ) == 1
+
+
+def test_worker_actor_retries_when_artifact_purge_fails(
+    db, workspace, store_root, monkeypatch,
+) -> None:
+    from apps.worker.tasks import retention_purge as task_module
+    from foundation.jobs import JobCommand, JobQueue
+    from source_catalog.retention import RetentionIncomplete
+
+    async def seed() -> str:
+        engine = create_async_engine(Settings.load().database_url)
+        try:
+            async with engine.begin() as connection:
+                return str(await JobQueue().enqueue(
+                    JobCommand(
+                        type="retention_purge", payload={},
+                        idempotency_key="retention_purge:test-retry",
+                    ),
+                    connection,
+                ))
+        finally:
+            await engine.dispose()
+
+    job_id = asyncio.run(seed())
+
+    async def stuck(engine, store, writer):
+        raise RetentionIncomplete("simulated stuck artifact")
+
+    monkeypatch.setattr(task_module, "run_retention_purge", stuck)
+    with pytest.raises(RetentionIncomplete):
+        task_module.retention_purge(job_id=job_id)
+    # The lease was released back to pending for the Dramatiq redelivery.
+    assert _counts(
+        db, "SELECT count(*) FROM jobs WHERE id = :id AND status = 'pending'", {"id": job_id},
+    ) == 1
+
+
+def test_daily_schedule_enqueues_once_per_day(db) -> None:
+    from apps.worker.relay import schedule_daily_retention_purge
+
+    async def run() -> str:
+        engine = create_async_engine(Settings.load().database_url)
+        try:
+            first = await schedule_daily_retention_purge(engine)
+            second = await schedule_daily_retention_purge(engine)
+            return f"{first}:{second}"
+        finally:
+            await engine.dispose()
+
+    first, second = asyncio.run(run()).split(":")
+    assert first == second
+    assert _counts(
+        db, "SELECT count(*) FROM jobs WHERE type = 'retention_purge'",
+    ) == 1
+    assert _counts(
+        db, "SELECT count(*) FROM outbox WHERE topic = 'retention_purge'",
+    ) == 1
