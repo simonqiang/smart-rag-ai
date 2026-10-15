@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from ai_providers.fakes import FakeEmbeddingProvider
 from foundation.config import ModelProfile, Settings
 from foundation.events import EventWriter
+from foundation.jobs import Lease
 from foundation.storage import ObjectStore
 from foundation.unit_of_work import UnitOfWork
 from identity_access.authorization import (
@@ -167,7 +168,7 @@ def _upload(
             uow, EventWriter(), store,
             context=workspace["owner_context"], collection_id=workspace["collection_id"],
             name=name, filename=f"{name}.txt",
-            data=f"{BODY} ({name})".encode("utf-8"),
+            data=f"{BODY} ({name})".encode(),
         )
         return await _pipeline(uow, store, workspace["owner_context"], accepted, f"{name}.txt")
 
@@ -487,6 +488,9 @@ def test_state_change_after_the_snapshot_releases_the_candidate(
 
     assert asyncio.run(run(stale_state)) is False  # state changed: release
     assert asyncio.run(run(young)) is False  # younger than the cutoff: release
+    # The row vanished between the snapshot and the claim (a Task 17 purge
+    # can race the scan): release without deleting.
+    assert asyncio.run(run(str(uuid.uuid4()))) is False
     for version_id in (stale_state, young):
         assert _counts(
             db, "SELECT count(*) FROM source_versions WHERE id = :id", {"id": version_id},
@@ -693,6 +697,31 @@ def test_worker_actor_retries_when_artifact_purge_fails(
     assert _counts(
         db, "SELECT count(*) FROM jobs WHERE id = :id AND status = 'pending'", {"id": job_id},
     ) == 1
+
+
+def test_worker_actor_skips_when_another_consumer_holds_the_lease(db, monkeypatch) -> None:
+    from apps.worker.tasks import retention_purge as task_module
+    from foundation.jobs import JobClaims, JobCommand, JobQueue
+
+    async def seed() -> str:
+        engine = create_async_engine(Settings.load().database_url)
+        try:
+            async with engine.begin() as connection:
+                job_id = str(await JobQueue().enqueue(
+                    JobCommand(
+                        type="retention_purge", payload={},
+                        idempotency_key="retention_purge:test-skip",
+                    ),
+                    connection,
+                ))
+            lease = await JobClaims(engine).claim(uuid.UUID(job_id))
+            assert isinstance(lease, Lease)
+        finally:
+            await engine.dispose()
+        return job_id
+
+    job_id = asyncio.run(seed())
+    assert task_module.retention_purge(job_id=job_id) == "skipped"
 
 
 def test_daily_schedule_enqueues_once_per_day(db) -> None:

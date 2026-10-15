@@ -50,13 +50,18 @@ async def _loop(engine, broker) -> None:
     scheduled: date | None = None
     while True:
         try:
-            if datetime.now(UTC).date() != scheduled:
-                scheduled = await schedule_daily_retention_purge(engine)
             # CancelledError is a BaseException: it passes the handler below
             # and shuts the loop down cleanly.
             await dispatcher.relay()
         except Exception:
             logger.exception("outbox relay failed; retrying")
+        # Scheduling never gates dispatch: a failing clock enqueue retries
+        # next tick (the idempotency key keeps it once per day).
+        try:
+            if datetime.now(UTC).date() != scheduled:
+                scheduled = await schedule_daily_retention_purge(engine)
+        except Exception:
+            logger.exception("daily retention scheduling failed; retrying next tick")
         await asyncio.sleep(POLL_SECONDS)
 
 

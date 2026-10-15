@@ -226,7 +226,7 @@ async def run_retention_purge(
     artifacts = await _purge_unreferenced_artifacts(engine, store, artifact_cutoff)
     # Deployments have exactly one workspace (first-owner exclusivity); the
     # run's counts-only receipt names it so Task 22 diagnostics can filter.
-    subject = workspaces[0] if len(workspaces) == 1 else "retention"
+    subject = workspaces[0]
     await _record_run(
         engine, writer, subject=subject, versions=versions,
         artifacts=artifacts, conversations=conversations,
@@ -250,11 +250,10 @@ async def _purge_unreferenced_artifacts(
     for address in store.addresses():
         if address in referenced:
             continue
-        try:
-            if store.age(address) >= cutoff.timestamp():
-                continue  # young: a racing upload may still owe its row
-        except OSError:
-            continue  # vanished mid-scan; nothing left to delete
+        # ponytail: no mid-scan vanishing guard — the job lease serialises
+        # consumers and a redelivery simply reruns the scan.
+        if store.age(address) >= cutoff.timestamp():
+            continue  # young: a racing upload may still owe its row
         try:
             store.delete(address)
         except OSError as failure:
