@@ -32,6 +32,7 @@ MINIMUM_ROLE = {
     "source.create": "admin",
     "source.update": "admin",
     "source.delete": "owner",
+    "index.rebuild": "owner",
 }
 
 # Actions that may never target the actor themselves.

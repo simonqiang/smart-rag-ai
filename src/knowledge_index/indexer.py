@@ -116,7 +116,7 @@ async def index_version(
             },
         )
         for ordinal, (chunk_row, vector) in enumerate(zip(chunks, result.vectors)):
-            await _insert_chunk(transaction, generation_id, workspace_id,
+            await insert_chunk(transaction, generation_id, workspace_id,
                                 source_version_id, ordinal, chunk_row, vector)
     return IndexedVersion(
         source_version_id=source_version_id,
@@ -151,7 +151,7 @@ def _as_indexed(row, state: str, source_version_id: str, *, duplicate: bool) -> 
     )
 
 
-async def _insert_chunk(transaction, generation_id: str, workspace_id: str,
+async def insert_chunk(transaction, generation_id: str, workspace_id: str,
                         source_version_id: str, ordinal: int,
                         chunk_row: Chunk, vector: list[float]) -> None:
     await transaction.execute(

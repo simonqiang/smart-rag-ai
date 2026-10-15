@@ -33,6 +33,7 @@ ACTIVATION_MESSAGES = {
     "not_staging": "index generation is not staged for activation",
     "empty": "index generation has no staged chunks",
     "dimension_mismatch": "staged vectors do not match the generation dimension",
+    "rebuild_in_progress": "a rebuild to a different compatibility key is running",
 }
 
 
@@ -104,6 +105,20 @@ async def activate_generation(
             raise ActivationError("not_found")
         if row["state"] != "staging":
             raise ActivationError("not_staging")
+        # Task 18: a stale pre-switch worker must not activate vectors the
+        # running rebuild is replacing; its job retries and converges after
+        # the cutover (the staged generation is retired by then).
+        blocked = (
+            await transaction.execute(
+                text(
+                    "SELECT 1 FROM index_rebuilds WHERE workspace_id = :ws "
+                    "AND state = 'running' AND target_key <> :key"
+                ),
+                {"ws": workspace_id, "key": row["compatibility_key"]},
+            )
+        ).first()
+        if blocked is not None:
+            raise ActivationError("rebuild_in_progress")
 
         validation = (
             await transaction.execute(

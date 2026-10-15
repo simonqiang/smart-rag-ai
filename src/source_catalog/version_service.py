@@ -22,12 +22,13 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from foundation.events import AuditEvent, EventWriter
+from foundation.events import AuditEvent, EventWriter, OutboxEvent
 from foundation.jobs import JobCommand, JobQueue
 from foundation.storage import ObjectStore
 from foundation.unit_of_work import UnitOfWork
 from identity_access.authorization import AccessContext, ProtectedResource, authorize
 from ingestion.uploads import UploadAccepted, register_upload
+from knowledge_index.rebuild import ACTIVATED_EVENT, ADVISORY_LOCK
 from source_catalog.catalog import SourceNotFound
 
 # States whose object content once passed validation, so rollback may reuse it.
@@ -154,10 +155,13 @@ async def activate_ready_version(
 
     Demoting the previous active version and promoting this one commit in a
     single transaction; the partial unique index turns a lost race into a
-    clean ``VersionNotReady`` instead of two live versions.
+    clean ``VersionNotReady`` instead of two live versions. The workspace
+    advisory lock serializes against a Task 18 rebuild cutover, and the
+    outbox event lets a running rebuild converge on the new live version.
     """
     authorize("source.update", ProtectedResource(context.workspace_id), context)
     async with uow.transaction() as transaction:
+        await transaction.execute(text(ADVISORY_LOCK), {"ws": context.workspace_id})
         await _owned_source(transaction, context, source_id)
         version = (
             (
@@ -202,6 +206,19 @@ async def activate_ready_version(
                 actor=context.user_id,
                 subject=version_id,
                 metadata={"source_id": source_id},
+            ),
+            transaction,
+        )
+        # Durable-ledger entry (Task 18): a running rebuild consumes this to
+        # converge on the newly live version before its own cutover.
+        await writer.record(
+            OutboxEvent(
+                topic=ACTIVATED_EVENT,
+                payload={
+                    "workspace_id": context.workspace_id,
+                    "source_id": source_id,
+                    "version_id": version_id,
+                },
             ),
             transaction,
         )

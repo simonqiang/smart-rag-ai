@@ -26,6 +26,7 @@ from ai_providers.contracts import ProviderError
 from apps.api.routes import ask as ask_routes
 from apps.api.routes import auth as auth_routes
 from apps.api.routes import conversations as conversation_routes
+from apps.api.routes import index_generations as index_generation_routes
 from apps.api.routes import search as search_routes
 from apps.api.routes import source_versions as source_version_routes
 from apps.api.routes import sources as source_routes
@@ -139,6 +140,7 @@ app.include_router(upload_routes.router)
 app.include_router(search_routes.router)
 app.include_router(ask_routes.router)
 app.include_router(conversation_routes.router)
+app.include_router(index_generation_routes.router)
 
 
 @app.exception_handler(TargetNotFound)

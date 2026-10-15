@@ -136,10 +136,11 @@ These are master work packages. Before implementation, any package larger than o
   - Acceptance: owner sets retention; scheduled purge removes expired superseded versions, retired pages, unreferenced artifacts, and expired conversations through the Task 17 purge path, never touching active knowledge; candidates are claimed under lock and rechecked before every destructive step; each run audits counts only.
   - Verify: integration tests cover expiry, shortened retention, active-never-purged, purge-versus-rollback/activation/snapshot-reuse concurrency, partial failure/retry, and non-owner denial; Playwright smoke for the retention screen.
   - Dependencies: Tasks 16–17.
-- [ ] **Task 18: Rebuild embedding generations safely**
+- [x] **Task 18: Rebuild embedding generations safely**
   - Acceptance: transactional outbox catches activation/deletion during rebuild and atomic cutover occurs only after convergence.
   - Verify: crash/concurrency tests prove candidate completeness or safe refusal.
   - Dependencies: Tasks 5, 12, 16–17.
+  - Status 2026-10-15 (complete): `src/knowledge_index/rebuild.py` (start_rebuild/apply_outbox_event/drain_outbox/stage_candidate/verify_candidate/activate_candidate), worker `apps/worker/tasks/rebuild_index.py`, routes `POST|GET /api/index/rebuild` (owner starts, admin observes, member denied), migration `0009` (outbox.seq watermark + index_rebuilds, one running per workspace). Membership is derived, never snapshotted ('active' + 'indexed' of non-deleted sources; archived included so unarchive never exposes a bare source); cutover re-derives under a per-workspace advisory lock that Task 16 cutover and Task 17 deletion requests also take, drains the ledger in the same transaction, verifies exact coverage, retires every non-target generation and activates candidates atomically (indexed replacements keep parity coverage). activate_generation refuses stale-key activations during a rebuild. Tests: tests/integration/knowledge_index/test_rebuild_concurrency.py (29, incl. 10-seed deterministic interleaving matrix) + tests/api/test_index_generation_routes.py. `make check` green 2026-10-15 (479 passed, diff coverage 100%).
 
 ### Checkpoint C
 

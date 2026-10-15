@@ -1,6 +1,7 @@
 """Task 16: archive, replacement cutover, and rollback (live Compose PostgreSQL)."""
 
 import asyncio
+import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -646,6 +647,28 @@ def test_distinct_version_cutovers_race_translates_the_lost_race(
             except VersionNotReady:
                 outcome = "lost"
 
+        async def wait_for_parked_rival() -> None:
+            """Deterministic park detection: the rival's demote blocks on the
+            winner's uncommitted row lock (a fixed sleep goes stale under load,
+            or when the rival gains a round-trip, and changes the winner)."""
+            deadline = time.monotonic() + 60
+            while time.monotonic() < deadline:
+                async with engine_a.connect() as probe:
+                    parked = (
+                        await probe.execute(
+                            text(
+                                "SELECT count(*) FROM pg_stat_activity "
+                                "WHERE pid <> pg_backend_pid() "
+                                "AND wait_event_type = 'Lock' "
+                                "AND query LIKE '%SET state = %superseded%'"
+                            )
+                        )
+                    ).scalar_one()
+                if parked:
+                    return
+                await asyncio.sleep(0.02)
+            raise AssertionError("rival never parked in its blocked demote")
+
         try:
             async with engine_a.begin() as winner:
                 await winner.execute(
@@ -663,7 +686,7 @@ def test_distinct_version_cutovers_race_translates_the_lost_race(
                     {"v": first["version_id"]},
                 )
                 pending = asyncio.create_task(rival())
-                await asyncio.sleep(0.05)  # let the rival park in its blocked demote
+                await wait_for_parked_rival()
             await pending  # winner commits; the rival's promote now conflicts
         finally:
             await engine_a.dispose()

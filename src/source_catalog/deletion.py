@@ -18,11 +18,12 @@ from dataclasses import asdict, dataclass
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from foundation.events import AuditEvent, EventWriter
+from foundation.events import AuditEvent, EventWriter, OutboxEvent
 from foundation.jobs import JobCommand, JobQueue
 from foundation.storage import ManagedBackupInventory, ObjectStore
 from foundation.unit_of_work import UnitOfWork
 from identity_access.authorization import AccessContext, ProtectedResource, authorize
+from knowledge_index.rebuild import ADVISORY_LOCK, DELETED_EVENT
 from source_catalog.catalog import SourceNotFound
 
 DELETION_NOTICE = "[The source cited here has been permanently deleted.]"
@@ -49,6 +50,9 @@ async def request_permanent_deletion(
     """Tombstone the source and schedule the purge (owner only)."""
     authorize("source.delete", ProtectedResource(context.workspace_id), context)
     async with uow.transaction() as transaction:
+        # Serializes against a Task 18 rebuild cutover, so a source deleted
+        # during a rebuild can never be activated by it afterwards.
+        await transaction.execute(text(ADVISORY_LOCK), {"ws": context.workspace_id})
         row = (
             (
                 await transaction.execute(
@@ -74,6 +78,18 @@ async def request_permanent_deletion(
                 actor=context.user_id,
                 subject=source_id,
                 metadata={},
+            ),
+            transaction,
+        )
+        # Durable-ledger entry (Task 18): a running rebuild drops this
+        # source's staged candidates and excludes it from cutover.
+        await writer.record(
+            OutboxEvent(
+                topic=DELETED_EVENT,
+                payload={
+                    "workspace_id": context.workspace_id,
+                    "source_id": source_id,
+                },
             ),
             transaction,
         )
