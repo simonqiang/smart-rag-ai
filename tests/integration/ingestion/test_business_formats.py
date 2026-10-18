@@ -6,6 +6,7 @@ Compose database through the shared ingestion fixtures.
 
 import asyncio
 from io import BytesIO
+from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
@@ -18,6 +19,14 @@ from identity_access.authorization import AccessContext
 from ingestion.extraction import SourceObject, extract
 from ingestion.parsers.archives import MAX_DECOMPRESSED_BYTES
 from ingestion.parsers.basic import ExtractionFailed
+
+IMAGE_MEDIA = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "webp": "image/webp",
+    "tif": "image/tiff",
+    "bmp": "image/bmp",
+}
 
 DOCX_MEDIA = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PPTX_MEDIA = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
@@ -676,3 +685,248 @@ def test_xlsx_and_csv_uploads_accepted(db, store_root, workspace) -> None:
         XLSX_MEDIA,
         "text/csv",
     ]
+
+
+# --------------------------------------------------------------------------
+# Image OCR (19d) — requires the host Tesseract with eng/chi_sim/chi_tra packs
+# --------------------------------------------------------------------------
+
+
+OCR_FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "ocr"
+
+
+def _image(media_type: str, filename: str) -> object:
+    return _extract(media_type, (OCR_FIXTURES / filename).read_bytes(), filename)
+
+
+def test_ocr_extracts_english_text_on_one_page() -> None:
+    doc = _image("image/png", "en.png")
+
+    assert doc.warnings == []
+    text = " ".join(block.text for block in doc.blocks)
+    assert "Quarterly Revenue Report" in text
+    assert doc.blocks[0].location.page == 1
+    assert doc.blocks[0].language == "en"
+
+
+def test_ocr_extracts_malay_text() -> None:
+    doc = _image("image/png", "ms.png")
+
+    text = " ".join(block.text for block in doc.blocks)
+    assert "Cuti tahunan" in text
+    assert doc.blocks[0].language == "ms"
+
+
+def test_ocr_extracts_simplified_chinese_content() -> None:
+    doc = _image("image/png", "zh-hans.png")
+
+    # Script-neutral substring: identical in both scripts regardless of which
+    # pack wins the confidence arbitration.
+    text = " ".join(block.text for block in doc.blocks)
+    assert "每年享有十五天" in text
+
+
+def test_ocr_extracts_traditional_chinese_content() -> None:
+    doc = _image("image/png", "zh-hant.png")
+
+    text = " ".join(block.text for block in doc.blocks)
+    assert "享有十五天" in text
+
+
+def _tsv(rows: list[tuple[int, int, str, float]]) -> dict:
+    return {
+        "block_num": [row[0] for row in rows],
+        "par_num": [row[1] for row in rows],
+        "text": [row[2] for row in rows],
+        "conf": [row[3] for row in rows],
+    }
+
+
+def test_ocr_arbitration_prefers_higher_confidence_pass(monkeypatch) -> None:
+    import pytesseract
+
+    from ingestion.parsers import ocr
+
+    calls: list[str] = []
+
+    def fake_tsv(image, lang: str, **kwargs) -> dict:
+        calls.append(lang)
+        if lang == ocr.BASE_LANG:
+            return _tsv([(1, 1, "員工", 90.0)])
+        return _tsv([(1, 1, "员工", 95.0)])
+
+    monkeypatch.setattr(ocr, "_load", lambda data: object())
+    monkeypatch.setattr(pytesseract, "image_to_data", fake_tsv)
+    doc = _extract("image/png", b"unused", "scan.png")
+
+    assert calls == [ocr.BASE_LANG, ocr.ALT_LANG]
+    assert doc.blocks[0].text == "员工"
+
+
+def test_ocr_arbitration_keeps_base_pass_on_tie(monkeypatch) -> None:
+    import pytesseract
+
+    from ingestion.parsers import ocr
+
+    monkeypatch.setattr(ocr, "_load", lambda data: object())
+    monkeypatch.setattr(
+        pytesseract,
+        "image_to_data",
+        lambda image, lang, **kwargs: _tsv([(1, 1, "员工年假", 90.0)]),
+    )
+    doc = _extract("image/png", b"unused", "scan.png")
+
+    assert doc.blocks[0].text == "员工年假"  # tie prefers chi_sim
+
+
+def test_ocr_groups_tsv_words_into_paragraph_blocks(monkeypatch) -> None:
+    import pytesseract
+
+    from ingestion.parsers import ocr
+
+    monkeypatch.setattr(ocr, "_load", lambda data: object())
+    monkeypatch.setattr(
+        pytesseract,
+        "image_to_data",
+        lambda image, lang, **kwargs: _tsv(
+            [
+                (1, 1, "Cuti", 90.0),
+                (1, 1, "tahunan", 92.0),
+                (1, 1, "", -1.0),  # non-word row
+                (1, 1, "?", "-"),  # unparseable confidence reads as no-text
+                (1, 2, "untuk", 88.0),
+                (2, 1, "kakitangan", 95.0),
+            ]
+        ),
+    )
+    doc = _extract("image/png", b"unused", "scan.png")
+
+    assert [block.text for block in doc.blocks] == [
+        "Cuti tahunan",
+        "untuk",
+        "kakitangan",
+    ]
+    assert [block.location.page for block in doc.blocks] == [1, 1, 1]
+
+
+def test_ocr_single_pass_for_latin_images(monkeypatch) -> None:
+    import pytesseract
+
+    from ingestion.parsers import ocr
+
+    calls: list[str] = []
+    monkeypatch.setattr(ocr, "_load", lambda data: object())
+
+    def fake_tsv(image, lang: str, **kwargs) -> dict:
+        calls.append(lang)
+        return _tsv([(1, 1, "hello", 99.0)])
+
+    monkeypatch.setattr(pytesseract, "image_to_data", fake_tsv)
+    doc = _extract("image/png", b"unused", "scan.png")
+
+    assert calls == [ocr.BASE_LANG]  # no Han characters, no second pass
+    assert doc.blocks[0].text == "hello"
+
+
+def test_ocr_maps_tesseract_failures_to_typed_reasons(monkeypatch) -> None:
+    import pytesseract
+
+    from ingestion.parsers import ocr
+
+    def raises(exc: Exception):
+        def boom(image, lang: str, **kwargs):
+            raise exc
+
+        return boom
+
+    cases = [
+        (raises(pytesseract.TesseractNotFoundError()), "ocr_unavailable"),
+        (raises(pytesseract.TesseractError(-1, "boom")), "ocr_failed"),
+        (raises(RuntimeError("Tesseract process timeout")), "ocr_failed"),
+    ]
+    monkeypatch.setattr(ocr, "_load", lambda data: object())
+    for fake, expected in cases:
+        monkeypatch.setattr(pytesseract, "image_to_data", fake)
+        with pytest.raises(ExtractionFailed) as excinfo:
+            _extract("image/png", b"unused", "scan.png")
+        assert excinfo.value.reason == expected
+
+
+def test_ocr_missing_language_pack_is_actionable(monkeypatch) -> None:
+    import pytesseract
+
+    from ingestion.parsers import ocr
+
+    def boom(image, lang: str, **kwargs):
+        raise pytesseract.TesseractError(-1, "Failed loading language 'chi_tra'")
+
+    monkeypatch.setattr(ocr, "_load", lambda data: object())
+    monkeypatch.setattr(pytesseract, "image_to_data", boom)
+    with pytest.raises(ExtractionFailed) as excinfo:
+        _extract("image/png", b"unused", "scan.png")
+    assert excinfo.value.reason == "ocr_language_missing"
+
+
+def test_ocr_rejects_corrupt_and_oversized_images(monkeypatch) -> None:
+    with pytest.raises(ExtractionFailed) as excinfo:
+        _extract("image/png", b"this is not an image at all", "junk.png")
+    assert excinfo.value.reason == "corrupt_image"
+
+    from ingestion.parsers import ocr
+
+    monkeypatch.setattr(ocr, "MAX_IMAGE_PIXELS", 100)
+    with pytest.raises(ExtractionFailed) as excinfo:
+        _extract("image/png", (OCR_FIXTURES / "en.png").read_bytes(), "en.png")
+    assert excinfo.value.reason == "image_too_large"
+
+
+def test_image_upload_magic_rejections_and_acceptance() -> None:
+    from PIL import Image
+
+    from ingestion.uploads import UploadRejected, _validate
+
+    rejected = [
+        ("x.png", b"plain text pretending"),
+        ("x.jpg", b"\xff\xd9"),  # wrong JPEG marker
+        ("x.webp", b"RIFFxxxxGAME"),  # RIFF container without the WEBP stamp
+        ("x.webp", b"GAMExxxxWEBP"),  # WEBP stamp outside a RIFF container
+        ("x.tif", b"MM\x00"),  # truncated big-endian magic
+        ("x.bmp", b"BA"),  # OS/2 bitmap array, not a supported BMP
+    ]
+    for filename, data in rejected:
+        with pytest.raises(UploadRejected) as excinfo:
+            _validate(data, filename, 1000)
+        assert excinfo.value.reason == "corrupt_image"
+
+    pixel = Image.new("RGB", (1, 1), "white")
+    for fmt, ext in [
+        ("PNG", "png"),
+        ("JPEG", "jpg"),
+        ("WEBP", "webp"),
+        ("TIFF", "tif"),
+        ("BMP", "bmp"),
+    ]:
+        buffer = BytesIO()
+        pixel.save(buffer, format=fmt)
+        assert _validate(buffer.getvalue(), f"scan.{ext}", 1000) == IMAGE_MEDIA[ext]
+
+
+def test_ocr_flattens_transparent_images_onto_white(monkeypatch) -> None:
+    import pytesseract
+    from PIL import Image
+
+
+    image = Image.new("RGBA", (4, 4), (0, 0, 0, 0))
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    seen: list[str] = []
+
+    def fake_tsv(img, lang: str, **kwargs) -> dict:
+        seen.append((img.mode, img.size))
+        return _tsv([(1, 1, "text", 99.0)])
+
+    monkeypatch.setattr(pytesseract, "image_to_data", fake_tsv)
+    doc = _extract("image/png", buffer.getvalue(), "transparent.png")
+
+    assert seen == [("RGB", (4, 4))]  # alpha flattened, white background
+    assert doc.blocks[0].text == "text"

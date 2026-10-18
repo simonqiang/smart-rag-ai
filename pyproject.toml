@@ -16,6 +16,7 @@ dependencies = [
     "python-multipart>=0.0.32",
     "docling>=2.134.0",
     "charset-normalizer>=3.5.2",
+    "pytesseract>=0.3.13",
     "torch==2.14.1",
 ]
 

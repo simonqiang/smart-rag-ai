@@ -6,8 +6,9 @@ straight from Docling's parse backend — page-located text cells with reading
 order — so extraction stays offline and deterministic.
 
 # ponytail: PDF uses the parse backend without Docling's layout models, so
-# blocks are line-stitched cells rather than model-segmented structure; the
-# StandardPdfPipeline (and OCR) arrives with the Task 19 adapters.
+# blocks are line-stitched cells rather than model-segmented structure, and
+# scanned PDFs stay an "empty" warning (Task 19 added OCR for image uploads
+# only). Revisit if evaluation shows scanned-PDF demand.
 """
 
 from __future__ import annotations
@@ -36,6 +37,13 @@ FAILURE_MESSAGES = {
     "corrupt_docx": "file is not a readable Word document",
     "corrupt_pptx": "file is not a readable PowerPoint document",
     "corrupt_xlsx": "file is not a readable Excel workbook",
+    "corrupt_image": "file is not a readable image",
+    "image_too_large": "image exceeds the 64-megapixel OCR limit",
+    "ocr_unavailable": "Tesseract OCR is not installed on the host",
+    "ocr_language_missing": (
+        "Tesseract language pack missing; install eng, chi_sim, chi_tra, and msa"
+    ),
+    "ocr_failed": "OCR failed on this image",
 }
 
 

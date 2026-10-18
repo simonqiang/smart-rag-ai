@@ -23,6 +23,7 @@ from ingestion.parsers.basic import (
     parse_text,
 )
 from ingestion.parsers.html import parse_html
+from ingestion.parsers.ocr import parse_image
 from ingestion.parsers.office import parse_docx, parse_pptx
 from ingestion.parsers.spreadsheet import parse_csv, parse_xlsx
 
@@ -79,6 +80,11 @@ _PARSERS = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": parse_docx,
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": parse_pptx,
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": parse_xlsx,
+    "image/png": parse_image,
+    "image/jpeg": parse_image,
+    "image/webp": parse_image,
+    "image/tiff": parse_image,
+    "image/bmp": parse_image,
 }
 
 

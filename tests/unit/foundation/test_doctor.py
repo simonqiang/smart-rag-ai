@@ -40,8 +40,18 @@ class FakeOllama:
         return self._models
 
 
-def make_settings(tmp_path, profile="recommended", ollama_host="http://127.0.0.1:11434"):
-    return Settings.load(path=None, overrides={"data_dir": str(tmp_path / "data"), "backup_dir": str(tmp_path / "backups"), "ollama_host": ollama_host, "profile": profile})
+def make_settings(
+    tmp_path, profile="recommended", ollama_host="http://127.0.0.1:11434"
+):
+    return Settings.load(
+        path=None,
+        overrides={
+            "data_dir": str(tmp_path / "data"),
+            "backup_dir": str(tmp_path / "backups"),
+            "ollama_host": ollama_host,
+            "profile": profile,
+        },
+    )
 
 
 def run(
@@ -51,6 +61,7 @@ def run(
     wsl=(1, ""),
     models=("qwen3:8b", "bge-m3"),
     ollama_reachable=True,
+    tesseract=(0, "eng\nosd\nchi_sim\nchi_tra\nmsa\n"),
     **kwargs,
 ):
     settings = make_settings(tmp_path, **kwargs)
@@ -58,6 +69,7 @@ def run(
         {
             ("docker", "info"): docker,
             ("wsl.exe", "--status"): wsl,
+            ("tesseract", "--list-langs"): tesseract,
         }
     )
     ollama = FakeOllama(list(models)) if ollama_reachable else UnreachableOllama()
@@ -125,9 +137,20 @@ def test_supported_hosts_pass(tmp_path, host):
     [
         (FakeHost(system="Darwin", machine="x86_64"), "Apple Silicon"),  # Intel Mac
         (FakeHost(system="Windows", machine="ARM64"), "x86_64"),  # Windows on ARM
-        (FakeHost(system="Linux", machine="aarch64", os_id="ubuntu", os_version="24.04"), "x86_64"),
-        (FakeHost(system="Windows", machine="AMD64", version="10.0.19045"), "Windows 11"),  # Windows 10
-        (FakeHost(system="Linux", machine="x86_64", os_id="debian", os_version="12"), "Ubuntu"),
+        (
+            FakeHost(
+                system="Linux", machine="aarch64", os_id="ubuntu", os_version="24.04"
+            ),
+            "x86_64",
+        ),
+        (
+            FakeHost(system="Windows", machine="AMD64", version="10.0.19045"),
+            "Windows 11",
+        ),  # Windows 10
+        (
+            FakeHost(system="Linux", machine="x86_64", os_id="debian", os_version="12"),
+            "Ubuntu",
+        ),
     ],
 )
 def test_unsupported_hosts_fail_with_remediation(tmp_path, host):
@@ -191,9 +214,16 @@ def test_writable_data_paths_pass(tmp_path):
 def test_unwritable_data_path_fails(tmp_path):
     blocker = tmp_path / "blocker"
     blocker.write_text("a file where a directory must go")
-    settings = Settings.load(overrides={"data_dir": str(blocker), "backup_dir": str(tmp_path / "backups")})
+    settings = Settings.load(
+        overrides={"data_dir": str(blocker), "backup_dir": str(tmp_path / "backups")}
+    )
     runner = FakeRunner({("docker", "info"): (0, "")})
-    report = run_doctor(settings, host=FakeHost(system="Darwin", machine="arm64"), runner=runner, ollama=FakeOllama(["qwen3:8b", "bge-m3"]))
+    report = run_doctor(
+        settings,
+        host=FakeHost(system="Darwin", machine="arm64"),
+        runner=runner,
+        ollama=FakeOllama(["qwen3:8b", "bge-m3"]),
+    )
     assert by_name(report, "data_paths_writable").status is CheckStatus.FAIL
 
 
@@ -249,3 +279,45 @@ def test_report_render_never_contains_secret_values(tmp_path, monkeypatch):
     rendered = report.render()
     assert "sk-supersecret-value" not in rendered
     assert "[redacted]" in rendered
+
+
+# --- OCR language packs (Task 19d) ------------------------------------------
+
+
+def test_ocr_packs_reported_ok_when_present(tmp_path):
+    report, _ = run(tmp_path)
+    check = by_name(report, "ocr_language_packs")
+    assert check.status is CheckStatus.OK
+    assert "chi_tra" in check.detail
+
+
+def test_missing_tesseract_fails_with_platform_remediation(tmp_path):
+    report, _ = run(tmp_path, tesseract=(1, ""))
+    check = by_name(report, "ocr_language_packs")
+    assert check.status is CheckStatus.FAIL
+    assert "brew install tesseract" in check.remediation
+
+
+def test_missing_tesseract_packs_are_listed_with_linux_remediation(tmp_path):
+    report, _ = run(
+        tmp_path,
+        host=FakeHost(
+            system="Linux", machine="x86_64", os_id="ubuntu", os_version="24.04"
+        ),
+        tesseract=(0, "eng\nosd\n"),
+    )
+    check = by_name(report, "ocr_language_packs")
+    assert check.status is CheckStatus.FAIL
+    assert "chi_sim, chi_tra, msa" in check.detail
+    assert "apt-get install" in check.remediation
+
+
+def test_missing_tesseract_windows_remediation_names_installer(tmp_path):
+    report, _ = run(
+        tmp_path,
+        host=FakeHost(system="Windows", machine="AMD64", version="10.0.22631"),
+        tesseract=(1, ""),
+    )
+    check = by_name(report, "ocr_language_packs")
+    assert check.status is CheckStatus.FAIL
+    assert "UB-Mannheim" in check.remediation

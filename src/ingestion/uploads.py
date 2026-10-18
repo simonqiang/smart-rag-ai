@@ -7,7 +7,8 @@ source, the version row, and both audit events. Rejections carry a machine
 reason so routes can give actionable failures; rejected content never
 creates rows.
 
-# ponytail: type set is the Phase-3 MVP set (PDF/TXT/MD); broaden with Task 19 adapters
+# ponytail: corruption checks stay magic-prefix level; deeper validation is
+# extraction's job (typed ExtractionFailed, non-active version).
 """
 
 from __future__ import annotations
@@ -42,6 +43,13 @@ MEDIA_TYPES = {
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ".csv": "text/csv",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+    ".bmp": "image/bmp",
 }
 
 # OOXML containers are zips; uploads without the magic are refused before storage.
@@ -53,10 +61,19 @@ OOXML_TYPES = frozenset(
     }
 )
 
+# Image magic prefixes; WEBP is the RIFF container carrying a WEBP stamp.
+IMAGE_MAGIC = {
+    "image/png": b"\x89PNG\r\n\x1a\n",
+    "image/jpeg": b"\xff\xd8\xff",
+    "image/tiff": b"II*\x00",
+    "image/bmp": b"BM",
+}
+
 REJECTION_MESSAGES = {
     "over_limit": "file exceeds the 50 MB upload limit",
     "unsupported_type": (
-        "unsupported file type; supported: PDF, TXT, Markdown, HTML, DOCX, PPTX, XLSX, CSV"
+        "unsupported file type; supported: PDF, TXT, Markdown, HTML, DOCX, PPTX, "
+        "XLSX, CSV, PNG, JPEG, WEBP, TIFF, BMP"
     ),
     "corrupt_pdf": "file is not a valid PDF (missing %PDF- header)",
     "encrypted_pdf": "password-protected PDFs are not supported; remove protection and retry",
@@ -64,6 +81,7 @@ REJECTION_MESSAGES = {
         "file is not a valid Office document (missing ZIP header); "
         "password-protected files are not supported"
     ),
+    "corrupt_image": "file is not a valid image (unrecognized header)",
 }
 
 
@@ -103,7 +121,16 @@ def _validate(data: bytes, filename: str, max_bytes: int) -> str:
             raise UploadRejected("encrypted_pdf")
     elif media_type in OOXML_TYPES and not data.startswith(b"PK\x03\x04"):
         raise UploadRejected("corrupt_office")
+    elif media_type.startswith("image/") and not _image_magic_ok(data, media_type):
+        raise UploadRejected("corrupt_image")
     return media_type
+
+
+def _image_magic_ok(data: bytes, media_type: str) -> bool:
+    if media_type == "image/webp":
+        return data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    magic = IMAGE_MAGIC.get(media_type)
+    return magic is not None and data.startswith(magic)
 
 
 async def register_upload(

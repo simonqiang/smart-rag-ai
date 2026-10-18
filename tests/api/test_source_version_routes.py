@@ -157,7 +157,7 @@ def test_stage_replacement_rejects_unsupported_upload(workspace) -> None:
 
     assert rejected.status_code == 400
     assert rejected.json() == {
-        "detail": "unsupported file type; supported: PDF, TXT, Markdown",
+        "detail": "unsupported file type; supported: PDF, TXT, Markdown, HTML, DOCX, PPTX, XLSX, CSV, PNG, JPEG, WEBP, TIFF, BMP",
     }
 
 
