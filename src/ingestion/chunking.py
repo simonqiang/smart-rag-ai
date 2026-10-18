@@ -38,25 +38,33 @@ def chunk(document: ExtractedDocument, policy: ChunkPolicy) -> list[Chunk]:
 
 
 def _pieces(
-    document: ExtractedDocument, policy: ChunkPolicy,
+    document: ExtractedDocument,
+    policy: ChunkPolicy,
 ) -> list[tuple[str, str, int | None, int]]:
     """Atomic (text, language, page, block ordinal) units within one block."""
     pieces: list[tuple[str, str, int | None, int]] = []
     for block in document.blocks:
         if len(block.text) <= policy.max_chars:
-            pieces.append((block.text, block.language, block.location.page, block.location.block))
+            pieces.append(
+                (block.text, block.language, block.location.page, block.location.block)
+            )
             continue
         step = max(policy.max_chars - policy.overlap_chars, 1)
         for start in range(0, len(block.text), step):
-            pieces.append((
-                block.text[start:start + policy.max_chars],
-                block.language, block.location.page, block.location.block,
-            ))
+            pieces.append(
+                (
+                    block.text[start : start + policy.max_chars],
+                    block.language,
+                    block.location.page,
+                    block.location.block,
+                )
+            )
     return pieces
 
 
 def _pack(
-    pieces: list[tuple[str, str, int | None, int]], policy: ChunkPolicy,
+    pieces: list[tuple[str, str, int | None, int]],
+    policy: ChunkPolicy,
 ) -> list[Chunk]:
     chunks: list[Chunk] = []
     current: list[tuple[str, str, int | None, int]] = []
@@ -65,13 +73,15 @@ def _pack(
         if not current:
             return
         languages = {language for _, language, _, _ in current}
-        chunks.append(Chunk(
-            text="\n".join(text for text, _, _, _ in current),
-            language=languages.pop() if len(languages) == 1 else "mixed",
-            page=current[0][2],
-            block_start=current[0][3],
-            block_end=current[-1][3],
-        ))
+        chunks.append(
+            Chunk(
+                text="\n".join(text for text, _, _, _ in current),
+                language=languages.pop() if len(languages) == 1 else "mixed",
+                page=current[0][2],
+                block_start=current[0][3],
+                block_end=current[-1][3],
+            )
+        )
         current.clear()
 
     for piece in pieces:

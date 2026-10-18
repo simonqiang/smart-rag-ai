@@ -38,13 +38,29 @@ MEDIA_TYPES = {
     ".markdown": "text/markdown",
     ".html": "text/html",
     ".htm": "text/html",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
+
+# OOXML containers are zips; uploads without the magic are refused before storage.
+OOXML_TYPES = frozenset(
+    {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    }
+)
 
 REJECTION_MESSAGES = {
     "over_limit": "file exceeds the 50 MB upload limit",
-    "unsupported_type": "unsupported file type; supported: PDF, TXT, Markdown, HTML",
+    "unsupported_type": (
+        "unsupported file type; supported: PDF, TXT, Markdown, HTML, DOCX, PPTX"
+    ),
     "corrupt_pdf": "file is not a valid PDF (missing %PDF- header)",
     "encrypted_pdf": "password-protected PDFs are not supported; remove protection and retry",
+    "corrupt_office": (
+        "file is not a valid Office document (missing ZIP header); "
+        "password-protected files are not supported"
+    ),
 }
 
 
@@ -82,6 +98,8 @@ def _validate(data: bytes, filename: str, max_bytes: int) -> str:
             raise UploadRejected("corrupt_pdf")
         if b"/Encrypt" in data:
             raise UploadRejected("encrypted_pdf")
+    elif media_type in OOXML_TYPES and not data.startswith(b"PK\x03\x04"):
+        raise UploadRejected("corrupt_office")
     return media_type
 
 
@@ -115,11 +133,15 @@ async def register_upload(
             # caller's workspace and still be live; unknown and foreign IDs are
             # indistinguishable so IDs cannot be probed.
             target = (
-                await transaction.execute(
-                    text("SELECT workspace_id, state FROM sources WHERE id = :id"),
-                    {"id": source_id},
+                (
+                    await transaction.execute(
+                        text("SELECT workspace_id, state FROM sources WHERE id = :id"),
+                        {"id": source_id},
+                    )
                 )
-            ).mappings().first()
+                .mappings()
+                .first()
+            )
             if target is None or str(target["workspace_id"]) != context.workspace_id:
                 raise SourceNotFound(source_id)
             if target["state"] != "active":
@@ -142,11 +164,17 @@ async def register_upload(
     async with uow.transaction() as transaction:
         if source_id != new_source_id:
             target = (
-                await transaction.execute(
-                    text("SELECT workspace_id, state FROM sources WHERE id = :id FOR UPDATE"),
-                    {"id": source_id},
+                (
+                    await transaction.execute(
+                        text(
+                            "SELECT workspace_id, state FROM sources WHERE id = :id FOR UPDATE"
+                        ),
+                        {"id": source_id},
+                    )
                 )
-            ).mappings().first()
+                .mappings()
+                .first()
+            )
             if target is None or str(target["workspace_id"]) != context.workspace_id:
                 raise SourceNotFound(source_id)
             if target["state"] != "active":
@@ -209,7 +237,11 @@ async def register_upload(
                     "size": len(data),
                     "media_type": media_type,
                     "filename": filename,
-                    **({"replacement_of": source_id} if source_id != new_source_id else {}),
+                    **(
+                        {"replacement_of": source_id}
+                        if source_id != new_source_id
+                        else {}
+                    ),
                 },
             ),
             transaction,

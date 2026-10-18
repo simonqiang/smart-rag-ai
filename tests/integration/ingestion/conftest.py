@@ -64,10 +64,14 @@ def workspace(db: Settings, store_root) -> dict:
         ObjectStore(store_root)
         try:
             owner = await create_first_owner(
-                uow, EventWriter(), email="owner@example.com", password="owner-password-1"
+                uow,
+                EventWriter(),
+                email="owner@example.com",
+                password="owner-password-1",
             )
             collection = await create_collection(
-                uow, EventWriter(),
+                uow,
+                EventWriter(),
                 context=AccessContext(
                     user_id=owner.user_id, workspace_id=owner.workspace_id, role="owner"
                 ),
@@ -75,7 +79,10 @@ def workspace(db: Settings, store_root) -> dict:
             )
         finally:
             await engine.dispose()
-        return {"workspace_id": owner.workspace_id, "owner_id": owner.user_id,
-                "collection_id": collection.collection_id}
+        return {
+            "workspace_id": owner.workspace_id,
+            "owner_id": owner.user_id,
+            "collection_id": collection.collection_id,
+        }
 
     return asyncio.run(create())

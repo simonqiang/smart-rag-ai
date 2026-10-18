@@ -45,13 +45,22 @@ def _owner_context(workspace: dict) -> AccessContext:
     )
 
 
-def _upload(db: Settings, store_root: Path, workspace: dict, *, data: bytes,
-            filename: str = "handbook.pdf", collection_id: str | None = None,
-            context: AccessContext | None = None,
-            max_bytes: int = 50 * 1024 * 1024) -> object:
+def _upload(
+    db: Settings,
+    store_root: Path,
+    workspace: dict,
+    *,
+    data: bytes,
+    filename: str = "handbook.pdf",
+    collection_id: str | None = None,
+    context: AccessContext | None = None,
+    max_bytes: int = 50 * 1024 * 1024,
+) -> object:
     async def run(uow, store: ObjectStore) -> object:
         return await register_upload(
-            uow, EventWriter(), store,
+            uow,
+            EventWriter(),
+            store,
             context=context or _owner_context(workspace),
             collection_id=collection_id or workspace["collection_id"],
             name="Employee Handbook",
@@ -63,7 +72,9 @@ def _upload(db: Settings, store_root: Path, workspace: dict, *, data: bytes,
     return _run(db, run, store_root)
 
 
-def test_valid_pdf_creates_source_version_object_and_audits(db, workspace, store_root) -> None:
+def test_valid_pdf_creates_source_version_object_and_audits(
+    db, workspace, store_root
+) -> None:
     accepted = _upload(db, store_root, workspace, data=VALID_PDF)
     checksum = hashlib.sha256(VALID_PDF).hexdigest()
 
@@ -76,16 +87,30 @@ def test_valid_pdf_creates_source_version_object_and_audits(db, workspace, store
     async def verify(uow, store: ObjectStore) -> tuple:
         async with uow.transaction() as transaction:
             version = (
-                await transaction.execute(text("SELECT state, media_type FROM source_versions"))
-            ).mappings().one()
-            source = (
-                await transaction.execute(text("SELECT state FROM sources"))
-            ).mappings().one()
-            audits = (
-                await transaction.execute(
-                    text("SELECT type FROM audit_events WHERE type LIKE 'source.%' ORDER BY type")
+                (
+                    await transaction.execute(
+                        text("SELECT state, media_type FROM source_versions")
+                    )
                 )
-            ).scalars().all()
+                .mappings()
+                .one()
+            )
+            source = (
+                (await transaction.execute(text("SELECT state FROM sources")))
+                .mappings()
+                .one()
+            )
+            audits = (
+                (
+                    await transaction.execute(
+                        text(
+                            "SELECT type FROM audit_events WHERE type LIKE 'source.%' ORDER BY type"
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
         stored = store.get(accepted.checksum)
         manifest = store.manifest(accepted.checksum)
         return dict(version), dict(source), list(audits), stored, manifest
@@ -137,7 +162,9 @@ def test_oversized_upload_refused_with_reason(db, workspace, store_root) -> None
 
 def test_corrupt_pdf_refused_with_reason(db, workspace, store_root) -> None:
     with pytest.raises(UploadRejected) as excinfo:
-        _upload(db, store_root, workspace, data=b"not a pdf at all", filename="broken.pdf")
+        _upload(
+            db, store_root, workspace, data=b"not a pdf at all", filename="broken.pdf"
+        )
 
     assert excinfo.value.reason == "corrupt_pdf"
 
@@ -183,7 +210,9 @@ def test_foreign_collection_refused(db, workspace, store_root) -> None:
 
 
 def test_upload_enqueues_extraction_in_the_same_transaction(
-    db: Settings, store_root: Path, workspace: dict,
+    db: Settings,
+    store_root: Path,
+    workspace: dict,
 ) -> None:
     """Upload-to-answer starts here: the committed upload must be dispatchable."""
 
@@ -203,7 +232,9 @@ def test_upload_enqueues_extraction_in_the_same_transaction(
             async with engine.begin() as connection:
                 outbox = (
                     await connection.execute(
-                        text("SELECT topic, payload FROM outbox WHERE topic = 'source_extract'")
+                        text(
+                            "SELECT topic, payload FROM outbox WHERE topic = 'source_extract'"
+                        )
                     )
                 ).all()
                 jobs = (
@@ -215,7 +246,9 @@ def test_upload_enqueues_extraction_in_the_same_transaction(
             await engine.dispose()
         return outbox, jobs
 
-    accepted = _upload(db, store_root, workspace, data=b"checkpoint pipeline", filename="a.txt")
+    accepted = _upload(
+        db, store_root, workspace, data=b"checkpoint pipeline", filename="a.txt"
+    )
     outbox, jobs = asyncio.run(verify())
 
     assert len(outbox) == 1
@@ -224,4 +257,6 @@ def test_upload_enqueues_extraction_in_the_same_transaction(
     assert payload["version_id"] == accepted.source_version_id
     assert payload["source_id"] == accepted.source_id
     assert payload["job_id"]
-    assert jobs == [("source_extract", "pending", f"source_extract:{accepted.source_version_id}")]
+    assert jobs == [
+        ("source_extract", "pending", f"source_extract:{accepted.source_version_id}")
+    ]

@@ -5,6 +5,8 @@ Compose database through the shared ingestion fixtures.
 """
 
 import asyncio
+from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -14,6 +16,12 @@ from foundation.storage import ObjectStore
 from foundation.unit_of_work import UnitOfWork
 from identity_access.authorization import AccessContext
 from ingestion.extraction import SourceObject, extract
+from ingestion.parsers.archives import MAX_DECOMPRESSED_BYTES
+from ingestion.parsers.basic import ExtractionFailed
+
+DOCX_MEDIA = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+PPTX_MEDIA = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def _extract(media_type: str, data: bytes, filename: str) -> object:
@@ -135,7 +143,8 @@ def test_html_wrong_declared_charset_falls_back_to_detection() -> None:
     doc = _html(content.replace(b"<body>", b'<body><meta charset="iso-8859-1">'))
     doc_late_meta = _html(
         content.replace(
-            b"<body>", b'<body><meta http-equiv="content-type" content="text/html; charset=gb18030">'
+            b"<body>",
+            b'<body><meta http-equiv="content-type" content="text/html; charset=gb18030">',
         )
     )
 
@@ -187,3 +196,279 @@ def test_html_upload_accepted_and_stored(db, store_root, workspace) -> None:
     accepted = asyncio.run(run_all())
 
     assert accepted.media_type == "text/html"
+
+
+# --------------------------------------------------------------------------
+# DOCX and PPTX (19b)
+# --------------------------------------------------------------------------
+
+
+def _docx(*paragraphs: tuple[str, str]) -> bytes:
+    from docx import Document
+
+    document = Document()
+    for style, text in paragraphs:
+        document.add_paragraph(text, style=style)
+    buffer = BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
+
+
+def _pptx_slides(*slides: list[tuple[str, str]]) -> bytes:
+    from pptx import Presentation
+
+    presentation = Presentation()
+    for shapes in slides:
+        slide = presentation.slides.add_slide(presentation.slide_layouts[1])
+        for placeholder, text in shapes:
+            slide.placeholders[1 if placeholder == "body" else 0].text = text
+    buffer = BytesIO()
+    presentation.save(buffer)
+    return buffer.getvalue()
+
+
+def test_docx_headings_and_paragraphs_ordered_multilingual() -> None:
+    doc = _extract(
+        DOCX_MEDIA,
+        _docx(
+            ("Heading 1", "Quarterly Report"),
+            ("Normal", "Revenue grew 12 percent."),
+            ("Normal", "营收增长百分之十二。"),
+        ),
+        "report.docx",
+    )
+
+    assert [block.text for block in doc.blocks] == [
+        "Quarterly Report",
+        "Revenue grew 12 percent.",
+        "营收增长百分之十二。",
+    ]
+    assert all(block.location.page is None for block in doc.blocks)
+    assert doc.blocks[-1].language == "zh-Hans"
+
+
+def test_docx_tables_extracted_in_document_order() -> None:
+    from docx import Document
+
+    document = Document()
+    document.add_paragraph("Before table")
+    table = document.add_table(rows=1, cols=2)
+    table.cell(0, 0).text = "Item"
+    table.cell(0, 1).text = "Price"
+    document.add_paragraph("After table")
+    buffer = BytesIO()
+    document.save(buffer)
+    doc = _extract(DOCX_MEDIA, buffer.getvalue(), "prices.docx")
+
+    assert [block.text for block in doc.blocks] == [
+        "Before table",
+        "Item | Price",
+        "After table",
+    ]
+
+
+def test_docx_empty_document_warns_empty() -> None:
+    doc = _extract(DOCX_MEDIA, _docx(), "empty.docx")
+
+    assert doc.blocks == []
+    assert doc.warnings == ["empty"]
+
+
+def test_docx_corrupt_bytes_fail_typed() -> None:
+    with pytest.raises(ExtractionFailed) as excinfo:
+        _extract(DOCX_MEDIA, b"definitely not a zip file", "broken.docx")
+    assert excinfo.value.reason == "corrupt_archive"
+
+
+def test_docx_valid_zip_with_garbage_content_fails_typed() -> None:
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("word/document.xml", b"<not-a-word-document/>")
+    with pytest.raises(ExtractionFailed) as excinfo:
+        _extract(DOCX_MEDIA, buffer.getvalue(), "junk.docx")
+    assert excinfo.value.reason == "corrupt_docx"
+
+
+def test_docx_encrypted_zip_fails_typed() -> None:
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("word/document.xml", b"<xml/>")
+
+    def encrypted(data: bytes) -> bytes:
+        # zipfile refuses to write encrypted entries; flip the central-directory
+        # flag bit the way a real encrypted archive carries it.
+        out = bytearray(data)
+        header = out.index(b"PK\x01\x02")
+        flags = int.from_bytes(out[header + 8 : header + 10], "little") | 0x1
+        out[header + 8 : header + 10] = flags.to_bytes(2, "little")
+        return bytes(out)
+
+    with pytest.raises(ExtractionFailed) as excinfo:
+        _extract(DOCX_MEDIA, encrypted(buffer.getvalue()), "secret.docx")
+    assert excinfo.value.reason == "encrypted_archive"
+
+
+def test_docx_archive_bomb_fails_typed() -> None:
+    bomb = BytesIO()
+    with ZipFile(bomb, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("word/document.xml", b"\0" * (MAX_DECOMPRESSED_BYTES + 1))
+    with pytest.raises(ExtractionFailed) as excinfo:
+        _extract(DOCX_MEDIA, bomb.getvalue(), "bomb.docx")
+    assert excinfo.value.reason == "archive_bomb"
+
+
+def test_pptx_slides_carry_page_locations() -> None:
+    doc = _extract(
+        PPTX_MEDIA,
+        _pptx_slides(
+            [("title", "Strategy"), ("body", " invest in APAC ")],
+            [("title", "Roadmap"), ("body", "Q4 launch")],
+        ),
+        "deck.pptx",
+    )
+
+    assert [(block.text, block.location.page) for block in doc.blocks] == [
+        ("Strategy", 1),
+        ("invest in APAC", 1),
+        ("Roadmap", 2),
+        ("Q4 launch", 2),
+    ]
+
+
+def test_pptx_tables_and_grouped_shapes_extracted() -> None:
+    from pptx import Presentation
+    from pptx.util import Inches
+
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])  # blank
+    table_shape = slide.shapes.add_table(
+        1, 2, Inches(1), Inches(1), Inches(4), Inches(1)
+    )
+    table_shape.table.cell(0, 0).text = "Region"
+    table_shape.table.cell(0, 1).text = "Sales"
+    group = slide.shapes.add_group_shape()
+    group.shapes.add_shape(
+        1, Inches(0), Inches(0), Inches(1), Inches(1)
+    ).text_frame.text = "Note"
+    buffer = BytesIO()
+    presentation.save(buffer)
+    doc = _extract(PPTX_MEDIA, buffer.getvalue(), "grid.pptx")
+
+    assert [(block.text, block.location.page) for block in doc.blocks] == [
+        ("Region | Sales", 1),
+        ("Note", 1),
+    ]
+
+
+def test_pptx_corrupt_bytes_fail_typed() -> None:
+    with pytest.raises(ExtractionFailed) as excinfo:
+        _extract(PPTX_MEDIA, b"\x00\x01\x02 not a deck", "broken.pptx")
+    assert excinfo.value.reason == "corrupt_archive"
+
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("ppt/slides/slide1.xml", b"<not-a-deck/>")
+    with pytest.raises(ExtractionFailed) as excinfo:
+        _extract(PPTX_MEDIA, buffer.getvalue(), "junk.pptx")
+    assert excinfo.value.reason == "corrupt_pptx"
+
+
+def test_office_uploads_reject_non_zip_content(db, store_root, workspace) -> None:
+    from ingestion.uploads import UploadRejected, register_upload
+
+    async def run(uow, store: ObjectStore) -> object:
+        return await register_upload(
+            uow,
+            EventWriter(),
+            store,
+            context=AccessContext(
+                user_id=workspace["owner_id"],
+                workspace_id=workspace["workspace_id"],
+                role="owner",
+            ),
+            collection_id=workspace["collection_id"],
+            name="Broken deck",
+            filename="broken.pptx",
+            data=b"plain text masquerading as a deck",
+        )
+
+    async def run_all() -> object:
+        engine = create_async_engine(db.database_url)
+        uow = UnitOfWork(engine)
+        try:
+            return await run(uow, ObjectStore(store_root))
+        finally:
+            await engine.dispose()
+
+    with pytest.raises(UploadRejected) as excinfo:
+        asyncio.run(run_all())
+    assert excinfo.value.reason == "corrupt_office"
+
+
+def test_docx_table_only_document_extracts_rows() -> None:
+    from docx import Document
+
+    document = Document()
+    table = document.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "Item"
+    table.cell(0, 1).text = "Price"
+    table.cell(1, 0).text = "Widget"
+    table.cell(1, 1).text = "5"
+    buffer = BytesIO()
+    document.save(buffer)
+    doc = _extract(DOCX_MEDIA, buffer.getvalue(), "table.docx")
+
+    assert [block.text for block in doc.blocks] == ["Item | Price", "Widget | 5"]
+
+
+def test_docx_blank_rows_and_cells_are_skipped() -> None:
+    from docx import Document
+
+    document = Document()
+    table = document.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = " "
+    table.cell(1, 0).text = "Widget"
+    document.add_paragraph("")  # blank paragraph between rows and tail
+    document.add_paragraph("Tail")
+    buffer = BytesIO()
+    document.save(buffer)
+    doc = _extract(DOCX_MEDIA, buffer.getvalue(), "sparse.docx")
+
+    assert [block.text for block in doc.blocks] == ["Widget", "Tail"]
+
+
+def test_pptx_pictures_and_blank_paragraphs_are_skipped() -> None:
+    from pptx import Presentation
+    from pptx.util import Inches
+
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])  # blank
+    slide.shapes.add_picture(BytesIO(_png_pixel()), Inches(0), Inches(0))
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(2), Inches(1))
+    box.text_frame.text = "Visible"
+    box.text_frame.add_paragraph()  # trailing blank paragraph
+    buffer = BytesIO()
+    presentation.save(buffer)
+    doc = _extract(PPTX_MEDIA, buffer.getvalue(), "mixed.pptx")
+
+    assert [(block.text, block.location.page) for block in doc.blocks] == [("Visible", 1)]
+
+
+def _png_pixel() -> bytes:
+    # A 1x1 red PNG; keeps the picture-shape test independent of Pillow.
+    return bytes.fromhex(
+        "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753"
+        "de0000000c4944415408d763f8cfc000000301010018dd8db00000000049454e44ae426082"
+    )
+
+
+def test_zip_guard_refuses_more_than_ten_thousand_entries() -> None:
+    from ingestion.parsers.archives import MAX_ENTRIES
+
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        for index in range(MAX_ENTRIES + 1):
+            archive.writestr(f"part/{index}.xml", b"<x/>")
+    with pytest.raises(ExtractionFailed) as excinfo:
+        _extract(DOCX_MEDIA, buffer.getvalue(), "many.docx")
+    assert excinfo.value.reason == "archive_bomb"

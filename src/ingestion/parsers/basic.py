@@ -30,6 +30,12 @@ FAILURE_MESSAGES = {
     "corrupt_pdf": "file is not a readable PDF document",
     "encrypted_pdf": "password-protected PDFs are not supported",
     "too_many_pages": "PDF exceeds the 2,000-page extraction limit",
+    "corrupt_archive": "file is not a readable Office document (or is password-protected)",
+    "encrypted_archive": "password-protected Office documents are not supported",
+    "archive_bomb": "file decompresses past the 500 MB safety limit",
+    "corrupt_docx": "file is not a readable Word document",
+    "corrupt_pptx": "file is not a readable PowerPoint document",
+    "corrupt_xlsx": "file is not a readable Excel workbook",
 }
 
 
@@ -127,17 +133,24 @@ def parse_pdf(data: bytes) -> list[RawBlock]:
         for cell in page.get_text_cells():
             if cell.text.strip():  # pragma: no branch - docling-parse trims cells
                 rect = cell.rect
-                cells.append((
-                    page.page_no, rect.r_y0, rect.r_x0, abs(rect.r_y0 - rect.r_y2),
-                    cell.text,
-                ))
+                cells.append(
+                    (
+                        page.page_no,
+                        rect.r_y0,
+                        rect.r_x0,
+                        abs(rect.r_y0 - rect.r_y2),
+                        cell.text,
+                    )
+                )
     return [
         RawBlock(text, page)
         for page, text in _stitch_cells(sorted(cells, key=lambda c: (c[0], c[1])))
     ]
 
 
-def _stitch_cells(cells: list[tuple[int, float, float, float, str]]) -> list[tuple[int, str]]:
+def _stitch_cells(
+    cells: list[tuple[int, float, float, float, str]],
+) -> list[tuple[int, str]]:
     """Merge consecutive same-column lines (small vertical pitch) per page."""
     blocks: list[tuple[int, str]] = []
     current: tuple[int, str, float, float, float] | None = None
@@ -183,4 +196,6 @@ def _join(*parts: str) -> str:
 
 def _is_cjk_text(ch: str) -> bool:
     code = ord(ch)
-    return 0x2E80 <= code <= 0x9FFF or 0xF900 <= code <= 0xFAFF or 0xFF00 <= code <= 0xFFEF
+    return (
+        0x2E80 <= code <= 0x9FFF or 0xF900 <= code <= 0xFAFF or 0xFF00 <= code <= 0xFFEF
+    )

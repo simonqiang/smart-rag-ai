@@ -49,15 +49,20 @@ def _run(settings: Settings, coro_factory, store_root: Path | None = None) -> ob
 
 def _owner_context(workspace: dict) -> AccessContext:
     return AccessContext(
-        user_id=workspace["owner_id"], workspace_id=workspace["workspace_id"], role="owner"
+        user_id=workspace["owner_id"],
+        workspace_id=workspace["workspace_id"],
+        role="owner",
     )
 
 
-def _upload(db: Settings, store_root: Path, workspace: dict, *, data: bytes,
-            filename: str) -> object:
+def _upload(
+    db: Settings, store_root: Path, workspace: dict, *, data: bytes, filename: str
+) -> object:
     async def run(uow, store: ObjectStore) -> object:
         return await register_upload(
-            uow, EventWriter(), store,
+            uow,
+            EventWriter(),
+            store,
             context=_owner_context(workspace),
             collection_id=workspace["collection_id"],
             name="Test document",
@@ -77,12 +82,18 @@ def test_detect_language_strata() -> None:
     assert detect_language("Welcome to the company handbook for all staff.") == "en"
     assert detect_language("员工每年享有十五天年假。") == "zh-Hans"
     assert detect_language("員工每年享有十五天年假。") == "zh-Hant"
-    assert detect_language(
-        "Buku panduan ini menerangkan cuti tahunan dan waktu kerja untuk semua kakitangan."
-    ) == "ms"
-    assert detect_language(
-        "产品发布会 Product Launch 定于十月十日举行。Selamat datang ke acara tahunan."
-    ) == "mixed"
+    assert (
+        detect_language(
+            "Buku panduan ini menerangkan cuti tahunan dan waktu kerja untuk semua kakitangan."
+        )
+        == "ms"
+    )
+    assert (
+        detect_language(
+            "产品发布会 Product Launch 定于十月十日举行。Selamat datang ke acara tahunan."
+        )
+        == "mixed"
+    )
 
 
 def test_detect_language_defaults_to_english_without_signal() -> None:
@@ -96,9 +107,11 @@ def test_detect_language_defaults_to_english_without_signal() -> None:
 
 def _extract_file(filename: str, media_type: str) -> ExtractedDocument:
     data = (FIXTURES / "text" / filename).read_bytes()
-    return extract(SourceObject(
-        source_version_id="v1", media_type=media_type, filename=filename, data=data
-    ))
+    return extract(
+        SourceObject(
+            source_version_id="v1", media_type=media_type, filename=filename, data=data
+        )
+    )
 
 
 def test_english_text_ordered_blocks_with_locations() -> None:
@@ -107,8 +120,10 @@ def test_english_text_ordered_blocks_with_locations() -> None:
     assert doc.warnings == []
     assert doc.language == "en"
     assert [block.text for block in doc.blocks] == [
-        ("Welcome to the company. This handbook explains leave policies "
-         "and working hours for all staff.")
+        (
+            "Welcome to the company. This handbook explains leave policies "
+            "and working hours for all staff."
+        )
     ]
     assert doc.blocks[0].location.page is None
     assert doc.blocks[0].location.block == 0
@@ -116,13 +131,18 @@ def test_english_text_ordered_blocks_with_locations() -> None:
 
 
 def test_wrapped_lines_join_cjk_aware() -> None:
-    doc = extract(SourceObject(
-        source_version_id="v1", media_type="text/plain", filename="wrap.txt",
-        data="Hello world\nwrapped here\n\n第二段开始\n换行继续".encode(),
-    ))
+    doc = extract(
+        SourceObject(
+            source_version_id="v1",
+            media_type="text/plain",
+            filename="wrap.txt",
+            data="Hello world\nwrapped here\n\n第二段开始\n换行继续".encode(),
+        )
+    )
 
     assert [block.text for block in doc.blocks] == [
-        "Hello world wrapped here", "第二段开始换行继续"
+        "Hello world wrapped here",
+        "第二段开始换行继续",
     ]
     assert [block.location.block for block in doc.blocks] == [0, 1]
 
@@ -158,18 +178,27 @@ def test_mixed_content_block_is_tagged_mixed() -> None:
 
 def test_undecodable_bytes_fail_typed() -> None:
     with pytest.raises(ExtractionFailed) as excinfo:
-        extract(SourceObject(
-            source_version_id="v1", media_type="text/plain", filename="junk.txt",
-            data=b"\xff\xff\xff\xff\xff",
-        ))
+        extract(
+            SourceObject(
+                source_version_id="v1",
+                media_type="text/plain",
+                filename="junk.txt",
+                data=b"\xff\xff\xff\xff\xff",
+            )
+        )
 
     assert excinfo.value.reason == "decode_failed"
 
 
 def test_empty_text_yields_empty_warning() -> None:
-    doc = extract(SourceObject(
-        source_version_id="v1", media_type="text/plain", filename="empty.txt", data=b"",
-    ))
+    doc = extract(
+        SourceObject(
+            source_version_id="v1",
+            media_type="text/plain",
+            filename="empty.txt",
+            data=b"",
+        )
+    )
 
     assert doc.blocks == []
     assert doc.warnings == ["empty"]
@@ -192,10 +221,14 @@ def test_markdown_headings_and_paragraphs_ordered() -> None:
 
 def test_unsupported_media_type_fails_typed() -> None:
     with pytest.raises(ExtractionFailed) as excinfo:
-        extract(SourceObject(
-            source_version_id="v1", media_type="application/zip", filename="a.zip",
-            data=b"PK",
-        ))
+        extract(
+            SourceObject(
+                source_version_id="v1",
+                media_type="application/zip",
+                filename="a.zip",
+                data=b"PK",
+            )
+        )
 
     assert excinfo.value.reason == "unsupported_type"
 
@@ -210,10 +243,14 @@ def _pdf(name: str) -> bytes:
 
 
 def test_pdf_multilingual_blocks_ordered_by_page() -> None:
-    doc = extract(SourceObject(
-        source_version_id="v1", media_type="application/pdf",
-        filename="multilingual.pdf", data=_pdf("multilingual"),
-    ))
+    doc = extract(
+        SourceObject(
+            source_version_id="v1",
+            media_type="application/pdf",
+            filename="multilingual.pdf",
+            data=_pdf("multilingual"),
+        )
+    )
 
     assert doc.warnings == []
     pages = [block.location.page for block in doc.blocks]
@@ -227,34 +264,49 @@ def test_pdf_multilingual_blocks_ordered_by_page() -> None:
 
 
 def test_pdf_stitches_wrapped_lines_within_paragraph() -> None:
-    doc = extract(SourceObject(
-        source_version_id="v1", media_type="application/pdf",
-        filename="multilingual.pdf", data=_pdf("multilingual"),
-    ))
+    doc = extract(
+        SourceObject(
+            source_version_id="v1",
+            media_type="application/pdf",
+            filename="multilingual.pdf",
+            data=_pdf("multilingual"),
+        )
+    )
 
-    stitched = [block.text for block in doc.blocks
-                if block.text.startswith("Permohonan")]
+    stitched = [
+        block.text for block in doc.blocks if block.text.startswith("Permohonan")
+    ]
     assert stitched == [
-        ("Permohonan cuti tahunan hendaklah dikemukakan sekurang-kurangnya "
-         "tujuh hari lebih awal.")
+        (
+            "Permohonan cuti tahunan hendaklah dikemukakan sekurang-kurangnya "
+            "tujuh hari lebih awal."
+        )
     ]
 
 
 def test_pdf_empty_document_warns_empty() -> None:
-    doc = extract(SourceObject(
-        source_version_id="v1", media_type="application/pdf",
-        filename="empty.pdf", data=_pdf("empty"),
-    ))
+    doc = extract(
+        SourceObject(
+            source_version_id="v1",
+            media_type="application/pdf",
+            filename="empty.pdf",
+            data=_pdf("empty"),
+        )
+    )
 
     assert doc.blocks == []
     assert doc.warnings == ["empty"]
 
 
 def test_pdf_scanned_document_warns_empty() -> None:
-    doc = extract(SourceObject(
-        source_version_id="v1", media_type="application/pdf",
-        filename="scanned.pdf", data=_pdf("scanned"),
-    ))
+    doc = extract(
+        SourceObject(
+            source_version_id="v1",
+            media_type="application/pdf",
+            filename="scanned.pdf",
+            data=_pdf("scanned"),
+        )
+    )
 
     assert doc.blocks == []
     assert doc.warnings == ["empty"]
@@ -262,20 +314,28 @@ def test_pdf_scanned_document_warns_empty() -> None:
 
 def test_pdf_encrypted_fails_typed() -> None:
     with pytest.raises(ExtractionFailed) as excinfo:
-        extract(SourceObject(
-            source_version_id="v1", media_type="application/pdf",
-            filename="encrypted.pdf", data=_pdf("encrypted"),
-        ))
+        extract(
+            SourceObject(
+                source_version_id="v1",
+                media_type="application/pdf",
+                filename="encrypted.pdf",
+                data=_pdf("encrypted"),
+            )
+        )
 
     assert excinfo.value.reason == "encrypted_pdf"
 
 
 def test_pdf_malformed_fails_typed() -> None:
     with pytest.raises(ExtractionFailed) as excinfo:
-        extract(SourceObject(
-            source_version_id="v1", media_type="application/pdf",
-            filename="broken.pdf", data=b"%PDF-1.7 not really a pdf",
-        ))
+        extract(
+            SourceObject(
+                source_version_id="v1",
+                media_type="application/pdf",
+                filename="broken.pdf",
+                data=b"%PDF-1.7 not really a pdf",
+            )
+        )
 
     assert excinfo.value.reason == "corrupt_pdf"
 
@@ -287,7 +347,9 @@ def test_pdf_without_magic_fails_typed() -> None:
     assert excinfo.value.reason == "corrupt_pdf"
 
 
-def test_pdf_backend_crash_is_mapped_to_corrupt(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pdf_backend_crash_is_mapped_to_corrupt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def explode(*args: object, **kwargs: object) -> object:
         raise ValueError("docling exploded")
 
@@ -308,7 +370,9 @@ def test_pdf_invalid_page_fails_typed(monkeypatch: pytest.MonkeyPatch) -> None:
             return False
 
     monkeypatch.setattr(
-        ThreadedDoclingParseDocumentBackend, "iter_pages", lambda self: iter([BrokenPage()])
+        ThreadedDoclingParseDocumentBackend,
+        "iter_pages",
+        lambda self: iter([BrokenPage()]),
     )
     with pytest.raises(ExtractionFailed) as excinfo:
         parse_pdf(_pdf("multilingual"))
@@ -317,10 +381,14 @@ def test_pdf_invalid_page_fails_typed(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_markdown_blank_lines_do_not_become_blocks() -> None:
-    doc = extract(SourceObject(
-        source_version_id="v1", media_type="text/markdown", filename="m.md",
-        data=b"\n\n# Title\nplain line in heading chunk\n\n\nbody\n\n",
-    ))
+    doc = extract(
+        SourceObject(
+            source_version_id="v1",
+            media_type="text/markdown",
+            filename="m.md",
+            data=b"\n\n# Title\nplain line in heading chunk\n\n\nbody\n\n",
+        )
+    )
 
     assert [block.text for block in doc.blocks] == ["Title", "body"]
 
@@ -354,8 +422,11 @@ def _enqueue_and_payload(db: Settings, accepted, store_root: Path) -> dict:
                 ),
                 transaction,
             )
-        return {"job_id": str(job_id), "version_id": accepted.source_version_id,
-                "source_id": accepted.source_id}
+        return {
+            "job_id": str(job_id),
+            "version_id": accepted.source_version_id,
+            "source_id": accepted.source_id,
+        }
 
     return _run(db, run, store_root)
 
@@ -380,11 +451,17 @@ def _version_state(db: Settings, job_id: str) -> tuple[str, list[str], str, str]
                 await transaction.execute(text("SELECT state FROM source_versions"))
             ).scalar_one()
             audits = (
-                await transaction.execute(
-                    text("SELECT type FROM audit_events WHERE type LIKE 'source.%' "
-                         "ORDER BY created_at, type")
+                (
+                    await transaction.execute(
+                        text(
+                            "SELECT type FROM audit_events WHERE type LIKE 'source.%' "
+                            "ORDER BY created_at, type"
+                        )
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             job = (
                 await transaction.execute(
                     text("SELECT status FROM jobs WHERE id = :id"), {"id": job_id}
@@ -398,9 +475,16 @@ def _version_state(db: Settings, job_id: str) -> tuple[str, list[str], str, str]
     return _run(db, run)
 
 
-def test_worker_extracts_and_marks_version_with_audit(db, workspace, store_root) -> None:
-    accepted = _upload(db, store_root, workspace,
-                       data=_pdf("multilingual"), filename="multilingual.pdf")
+def test_worker_extracts_and_marks_version_with_audit(
+    db, workspace, store_root
+) -> None:
+    accepted = _upload(
+        db,
+        store_root,
+        workspace,
+        data=_pdf("multilingual"),
+        filename="multilingual.pdf",
+    )
     payload = _enqueue_and_payload(db, accepted, store_root)
 
     assert _worker(db, store_root, payload) == "extracted"
@@ -412,10 +496,17 @@ def test_worker_extracts_and_marks_version_with_audit(db, workspace, store_root)
 
 
 def test_worker_failure_marks_version_failed_and_leaves_source_active(
-    db, workspace, store_root,
+    db,
+    workspace,
+    store_root,
 ) -> None:
-    accepted = _upload(db, store_root, workspace,
-                       data=b"%PDF-1.7 fake pdf body for testing", filename="broken.pdf")
+    accepted = _upload(
+        db,
+        store_root,
+        workspace,
+        data=b"%PDF-1.7 fake pdf body for testing",
+        filename="broken.pdf",
+    )
     payload = _enqueue_and_payload(db, accepted, store_root)
 
     outcome = _worker(db, store_root, payload)
@@ -430,10 +521,17 @@ def test_worker_failure_marks_version_failed_and_leaves_source_active(
 
 
 def test_worker_transient_error_keeps_uploaded_state_and_retry_recovers(
-    db, workspace, store_root,
+    db,
+    workspace,
+    store_root,
 ) -> None:
-    accepted = _upload(db, store_root, workspace,
-                       data=_pdf("multilingual"), filename="multilingual.pdf")
+    accepted = _upload(
+        db,
+        store_root,
+        workspace,
+        data=_pdf("multilingual"),
+        filename="multilingual.pdf",
+    )
     payload = _enqueue_and_payload(db, accepted, store_root)
     object_path = store_root / "objects" / accepted.checksum
     real_bytes = object_path.read_bytes()
@@ -465,8 +563,13 @@ def test_worker_transient_error_keeps_uploaded_state_and_retry_recovers(
 
 
 def test_worker_completed_delivery_is_idempotent(db, workspace, store_root) -> None:
-    accepted = _upload(db, store_root, workspace,
-                       data=_pdf("multilingual"), filename="multilingual.pdf")
+    accepted = _upload(
+        db,
+        store_root,
+        workspace,
+        data=_pdf("multilingual"),
+        filename="multilingual.pdf",
+    )
     payload = _enqueue_and_payload(db, accepted, store_root)
 
     assert _worker(db, store_root, payload) == "extracted"
@@ -478,12 +581,19 @@ def test_worker_completed_delivery_is_idempotent(db, workspace, store_root) -> N
 
 
 def test_worker_crash_between_version_and_job_completion_is_recovered(
-    db, workspace, store_root,
+    db,
+    workspace,
+    store_root,
 ) -> None:
     # The version flipped but the job record did not: redelivery must not
     # re-extract or double-audit.
-    accepted = _upload(db, store_root, workspace,
-                       data=_pdf("multilingual"), filename="multilingual.pdf")
+    accepted = _upload(
+        db,
+        store_root,
+        workspace,
+        data=_pdf("multilingual"),
+        filename="multilingual.pdf",
+    )
     payload = _enqueue_and_payload(db, accepted, store_root)
     assert _worker(db, store_root, payload) == "extracted"
 
@@ -491,8 +601,10 @@ def test_worker_crash_between_version_and_job_completion_is_recovered(
         engine = create_async_engine(db.database_url)
         async with engine.begin() as connection:
             await connection.execute(
-                text("UPDATE jobs SET status = 'pending', lease_owner = NULL, "
-                     "lease_expires_at = NULL WHERE id = :id"),
+                text(
+                    "UPDATE jobs SET status = 'pending', lease_owner = NULL, "
+                    "lease_expires_at = NULL WHERE id = :id"
+                ),
                 {"id": payload["job_id"]},
             )
         await engine.dispose()
@@ -506,12 +618,20 @@ def test_worker_crash_between_version_and_job_completion_is_recovered(
 
 
 def test_actor_composes_settings_store_and_pipeline(
-    db, workspace, store_root, monkeypatch: pytest.MonkeyPatch,
+    db,
+    workspace,
+    store_root,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from apps.worker.tasks import extract as task_module
 
-    accepted = _upload(db, store_root, workspace,
-                       data=_pdf("multilingual"), filename="multilingual.pdf")
+    accepted = _upload(
+        db,
+        store_root,
+        workspace,
+        data=_pdf("multilingual"),
+        filename="multilingual.pdf",
+    )
     payload = _enqueue_and_payload(db, accepted, store_root)
 
     class FakeSettings:
@@ -523,7 +643,9 @@ def test_actor_composes_settings_store_and_pipeline(
             return cls()
 
     monkeypatch.setattr(task_module, "Settings", FakeSettings)
-    monkeypatch.setattr(task_module, "ObjectStore", lambda _root: ObjectStore(store_root))
+    monkeypatch.setattr(
+        task_module, "ObjectStore", lambda _root: ObjectStore(store_root)
+    )
 
     assert task_module.source_extract(**payload) == "extracted"
     version, _audits, job, _source = _version_state(db, payload["job_id"])
@@ -532,12 +654,20 @@ def test_actor_composes_settings_store_and_pipeline(
 
 
 def test_worker_aborts_when_job_is_cancelled_after_claim(
-    db, workspace, store_root, monkeypatch: pytest.MonkeyPatch,
+    db,
+    workspace,
+    store_root,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from apps.worker.tasks import extract as task_module
 
-    accepted = _upload(db, store_root, workspace,
-                       data=_pdf("multilingual"), filename="multilingual.pdf")
+    accepted = _upload(
+        db,
+        store_root,
+        workspace,
+        data=_pdf("multilingual"),
+        filename="multilingual.pdf",
+    )
     payload = _enqueue_and_payload(db, accepted, store_root)
 
     def cancel_during_extract(source_object: SourceObject) -> ExtractedDocument:
@@ -561,7 +691,9 @@ def test_worker_aborts_when_job_is_cancelled_after_claim(
         return ExtractedDocument(
             source_version_id=source_object.source_version_id,
             media_type=source_object.media_type,
-            language="en", blocks=[], warnings=[],
+            language="en",
+            blocks=[],
+            warnings=[],
         )
 
     monkeypatch.setattr(task_module, "extract", cancel_during_extract)
@@ -573,8 +705,11 @@ def test_worker_aborts_when_job_is_cancelled_after_claim(
 
 def test_worker_unknown_version_fails_job(db, workspace, store_root) -> None:
     # Version deleted between enqueue and delivery (Task 17 purge path).
-    bogus = {"job_id": str(uuid.uuid4()), "version_id": str(uuid.uuid4()),
-             "source_id": str(uuid.uuid4())}
+    bogus = {
+        "job_id": str(uuid.uuid4()),
+        "version_id": str(uuid.uuid4()),
+        "source_id": str(uuid.uuid4()),
+    }
 
     async def enqueue() -> dict:
         engine = create_async_engine(db.database_url)
@@ -583,7 +718,10 @@ def test_worker_unknown_version_fails_job(db, workspace, store_root) -> None:
                 job_id = await JobQueue().enqueue(
                     JobCommand(
                         type="source_extract",
-                        payload={"version_id": bogus["version_id"], "source_id": bogus["source_id"]},
+                        payload={
+                            "version_id": bogus["version_id"],
+                            "source_id": bogus["source_id"],
+                        },
                         idempotency_key=f"source_extract:{bogus['version_id']}",
                     ),
                     connection,
@@ -598,18 +736,24 @@ def test_worker_unknown_version_fails_job(db, workspace, store_root) -> None:
 
 
 def test_extracted_version_chains_the_index_job(
-    db, workspace, store_root,
+    db,
+    workspace,
+    store_root,
 ) -> None:
     """Extraction must dispatch indexing, or uploads stall half-processed."""
 
-    accepted = _upload(db, store_root, workspace, data=_pdf("multilingual"), filename="chain.pdf")
+    accepted = _upload(
+        db, store_root, workspace, data=_pdf("multilingual"), filename="chain.pdf"
+    )
     payload = _enqueue_and_payload(db, accepted, store_root)
 
     async def clean_outbox() -> None:
         engine = create_async_engine(db.database_url)
         try:
             async with engine.begin() as connection:
-                await connection.execute(text("DELETE FROM outbox WHERE topic = 'source_index'"))
+                await connection.execute(
+                    text("DELETE FROM outbox WHERE topic = 'source_index'")
+                )
         finally:
             await engine.dispose()
 
@@ -622,7 +766,9 @@ def test_extracted_version_chains_the_index_job(
             async with engine.begin() as connection:
                 return (
                     await connection.execute(
-                        text("SELECT topic, payload FROM outbox WHERE topic = 'source_index'")
+                        text(
+                            "SELECT topic, payload FROM outbox WHERE topic = 'source_index'"
+                        )
                     )
                 ).all()
         finally:

@@ -23,6 +23,7 @@ from ingestion.parsers.basic import (
     parse_text,
 )
 from ingestion.parsers.html import parse_html
+from ingestion.parsers.office import parse_docx, parse_pptx
 
 __all__ = [
     "LANGUAGES",
@@ -73,6 +74,8 @@ _PARSERS = {
     "text/markdown": parse_markdown,
     "application/pdf": parse_pdf,
     "text/html": parse_html,
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": parse_docx,
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": parse_pptx,
 }
 
 
@@ -82,7 +85,9 @@ def extract(source: SourceObject) -> ExtractedDocument:
         raise ExtractionFailed("unsupported_type")
     raw_blocks: list[RawBlock] = parser(source.data)
     blocks = [
-        TextBlock(raw.text, detect_language(raw.text), SourceLocation(raw.page, ordinal))
+        TextBlock(
+            raw.text, detect_language(raw.text), SourceLocation(raw.page, ordinal)
+        )
         for ordinal, raw in enumerate(raw_blocks)
     ]
     return ExtractedDocument(
@@ -168,20 +173,88 @@ def _chinese_script(text: str) -> str:
     return "zh-Hant" if traditional > simplified else "zh-Hans"
 
 
-_MALAY_MARKERS = frozenset((
-    "yang", "dan", "ini", "itu", "dengan", "untuk", "adalah", "tidak", "juga",
-    "pada", "dalam", "akan", "atau", "telah", "dari", "kami", "kita", "mereka",
-    "saya", "boleh", "serta", "jika", "maka", "hingga", "kerana", "secara",
-    "antara", "semua", "oleh", "hendaklah",
-))
+_MALAY_MARKERS = frozenset(
+    (
+        "yang",
+        "dan",
+        "ini",
+        "itu",
+        "dengan",
+        "untuk",
+        "adalah",
+        "tidak",
+        "juga",
+        "pada",
+        "dalam",
+        "akan",
+        "atau",
+        "telah",
+        "dari",
+        "kami",
+        "kita",
+        "mereka",
+        "saya",
+        "boleh",
+        "serta",
+        "jika",
+        "maka",
+        "hingga",
+        "kerana",
+        "secara",
+        "antara",
+        "semua",
+        "oleh",
+        "hendaklah",
+    )
+)
 
-_ENGLISH_MARKERS = frozenset((
-    "the", "and", "of", "to", "in", "is", "are", "was", "were", "be", "been",
-    "for", "with", "that", "this", "it", "as", "at", "by", "from", "on", "or",
-    "an", "have", "has", "had", "not", "but", "they", "we", "you", "he", "she",
-    "which", "their", "there", "these", "those", "will", "would", "can",
-    "could", "should",
-))
+_ENGLISH_MARKERS = frozenset(
+    (
+        "the",
+        "and",
+        "of",
+        "to",
+        "in",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "for",
+        "with",
+        "that",
+        "this",
+        "it",
+        "as",
+        "at",
+        "by",
+        "from",
+        "on",
+        "or",
+        "an",
+        "have",
+        "has",
+        "had",
+        "not",
+        "but",
+        "they",
+        "we",
+        "you",
+        "he",
+        "she",
+        "which",
+        "their",
+        "there",
+        "these",
+        "those",
+        "will",
+        "would",
+        "can",
+        "could",
+        "should",
+    )
+)
 
 _WORD = re.compile(r"[a-z]+")
 
