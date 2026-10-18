@@ -53,6 +53,14 @@ class RawBlock:
     page: int | None = None
 
 
+class ParseResult(list):
+    """Blocks plus document-level warnings (plain lists stay warning-free)."""
+
+    def __init__(self, blocks: list[RawBlock], warnings: list[str]) -> None:
+        super().__init__(blocks)
+        self.warnings = list(dict.fromkeys(warnings))  # unique, order kept
+
+
 _SUPPORTED_ENCODINGS = frozenset(("ascii", "utf_8", "gb18030", "big5"))
 
 

@@ -40,6 +40,8 @@ MEDIA_TYPES = {
     ".htm": "text/html",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".csv": "text/csv",
 }
 
 # OOXML containers are zips; uploads without the magic are refused before storage.
@@ -47,13 +49,14 @@ OOXML_TYPES = frozenset(
     {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }
 )
 
 REJECTION_MESSAGES = {
     "over_limit": "file exceeds the 50 MB upload limit",
     "unsupported_type": (
-        "unsupported file type; supported: PDF, TXT, Markdown, HTML, DOCX, PPTX"
+        "unsupported file type; supported: PDF, TXT, Markdown, HTML, DOCX, PPTX, XLSX, CSV"
     ),
     "corrupt_pdf": "file is not a valid PDF (missing %PDF- header)",
     "encrypted_pdf": "password-protected PDFs are not supported; remove protection and retry",

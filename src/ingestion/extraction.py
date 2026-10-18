@@ -24,6 +24,7 @@ from ingestion.parsers.basic import (
 )
 from ingestion.parsers.html import parse_html
 from ingestion.parsers.office import parse_docx, parse_pptx
+from ingestion.parsers.spreadsheet import parse_csv, parse_xlsx
 
 __all__ = [
     "LANGUAGES",
@@ -74,8 +75,10 @@ _PARSERS = {
     "text/markdown": parse_markdown,
     "application/pdf": parse_pdf,
     "text/html": parse_html,
+    "text/csv": parse_csv,
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": parse_docx,
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": parse_pptx,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": parse_xlsx,
 }
 
 
@@ -90,12 +93,14 @@ def extract(source: SourceObject) -> ExtractedDocument:
         )
         for ordinal, raw in enumerate(raw_blocks)
     ]
+    warnings = ["empty"] if not blocks else []
+    warnings += getattr(raw_blocks, "warnings", ())  # ParseResult carriers
     return ExtractedDocument(
         source_version_id=source.source_version_id,
         media_type=source.media_type,
         language=_document_language(blocks),
         blocks=blocks,
-        warnings=["empty"] if not blocks else [],
+        warnings=warnings,
     )
 
 

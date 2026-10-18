@@ -451,7 +451,9 @@ def test_pptx_pictures_and_blank_paragraphs_are_skipped() -> None:
     presentation.save(buffer)
     doc = _extract(PPTX_MEDIA, buffer.getvalue(), "mixed.pptx")
 
-    assert [(block.text, block.location.page) for block in doc.blocks] == [("Visible", 1)]
+    assert [(block.text, block.location.page) for block in doc.blocks] == [
+        ("Visible", 1)
+    ]
 
 
 def _png_pixel() -> bytes:
@@ -472,3 +474,205 @@ def test_zip_guard_refuses_more_than_ten_thousand_entries() -> None:
     with pytest.raises(ExtractionFailed) as excinfo:
         _extract(DOCX_MEDIA, buffer.getvalue(), "many.docx")
     assert excinfo.value.reason == "archive_bomb"
+
+
+# --------------------------------------------------------------------------
+# XLSX and CSV (19c)
+# --------------------------------------------------------------------------
+
+
+def _xlsx(*sheets: list[list[object]], merged: bool = False) -> bytes:
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    for rows in sheets:
+        sheet = workbook.create_sheet()
+        for row in rows:
+            sheet.append(row)
+    if merged:
+        workbook.worksheets[0].merge_cells("A2:B2")
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
+def test_xlsx_sheets_are_pages_with_header_paired_rows() -> None:
+    doc = _extract(
+        XLSX_MEDIA,
+        _xlsx(
+            [["Item", "Price"], ["Widget", 5], ["Gadget", 12.5]],
+            [["Region", "Q1"], ["APAC", 100]],
+        ),
+        "prices.xlsx",
+    )
+
+    assert [(block.text, block.location.page) for block in doc.blocks] == [
+        ("Item=Widget | Price=5", 1),
+        ("Item=Gadget | Price=12.5", 1),
+        ("Region=APAC | Q1=100", 2),
+    ]
+
+
+def test_xlsx_merged_cells_keep_top_left_value_only() -> None:
+    doc = _extract(
+        XLSX_MEDIA,
+        _xlsx([["Item", "Price"], ["Bundle deal", None], ["Widget", 5]], merged=True),
+        "merged.xlsx",
+    )
+
+    assert [block.text for block in doc.blocks] == [
+        "Item=Bundle deal",
+        "Item=Widget | Price=5",
+    ]
+
+
+def test_xlsx_uncached_formula_contributes_nothing() -> None:
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Total"])
+    sheet["A2"] = 2
+    sheet["A3"] = 3
+    sheet["A4"] = "=A2+A3"  # cached value written by openpyxl on save? (no)
+    buffer = BytesIO()
+    workbook.save(buffer)
+    doc = _extract(XLSX_MEDIA, buffer.getvalue(), "formulas.xlsx")
+
+    # plain values pass through; openpyxl never writes caches, so the
+    # uncached =A2+A3 formula contributes nothing.
+    assert [block.text for block in doc.blocks] == ["Total=2", "Total=3"]
+
+
+def test_xlsx_empty_sheets_warn_empty() -> None:
+    doc = _extract(XLSX_MEDIA, _xlsx([[], []]), "blank.xlsx")
+
+    assert doc.blocks == []
+    assert doc.warnings == ["empty"]
+
+
+def test_xlsx_large_sheet_is_truncated_with_warning() -> None:
+    from ingestion.parsers.spreadsheet import MAX_SHEET_ROWS
+
+    rows: list[list[object]] = [["Item", "Price"]]
+    rows += [["Widget", index] for index in range(MAX_SHEET_ROWS + 5)]
+    doc = _extract(XLSX_MEDIA, _xlsx(rows), "large.xlsx")
+
+    assert len(doc.blocks) == MAX_SHEET_ROWS
+    assert doc.warnings == ["rows_truncated"]
+
+
+def test_xlsx_overlong_cell_is_truncated_with_warning() -> None:
+    from ingestion.parsers.spreadsheet import MAX_CELL_CHARS
+
+    doc = _extract(
+        XLSX_MEDIA, _xlsx([["Item"], ["x" * (MAX_CELL_CHARS + 50)]]), "long.xlsx"
+    )
+
+    assert len(doc.blocks[0].text) < MAX_CELL_CHARS + 10
+    assert doc.warnings == ["cells_truncated"]
+
+
+def test_xlsx_corrupt_zip_fails_typed() -> None:
+    with pytest.raises(ExtractionFailed) as excinfo:
+        _extract(XLSX_MEDIA, b"PK\x03\x04 followed by junk", "broken.xlsx")
+    assert excinfo.value.reason == "corrupt_archive"
+
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("xl/workbook.xml", b"<not-a-workbook/>")
+    with pytest.raises(ExtractionFailed) as excinfo:
+        _extract(XLSX_MEDIA, buffer.getvalue(), "junk.xlsx")
+    assert excinfo.value.reason == "corrupt_xlsx"
+
+
+def test_csv_rows_are_header_paired_without_pages() -> None:
+    doc = _extract("text/csv", b"Item,Price\nWidget,5\nGadget,12.5\n", "prices.csv")
+
+    assert [(block.text, block.location.page) for block in doc.blocks] == [
+        ("Item=Widget | Price=5", None),
+        ("Item=Gadget | Price=12.5", None),
+    ]
+
+
+def test_csv_gb18030_decodes_chinese_headers() -> None:
+    body = "项目,价格\nwidget,5\n".encode("gb18030")
+    doc = _extract("text/csv", body, "prices.csv")
+
+    assert doc.blocks[0].text == "项目=widget | 价格=5"
+    assert doc.blocks[0].language == "mixed"  # CJK headers + latin values
+
+
+def test_csv_blank_rows_and_extra_columns_are_kept_positional() -> None:
+    doc = _extract("text/csv", b"Item,Price\nWidget,5,extra\n,7\n", "ragged.csv")
+
+    assert [block.text for block in doc.blocks] == [
+        "Item=Widget | Price=5 | Column3=extra",
+        "Price=7",
+    ]
+
+
+def test_csv_nul_bytes_are_stripped() -> None:
+    doc = _extract("text/csv", b"Item,Price\nW\x00i,d\n", "null.csv")
+
+    assert [block.text for block in doc.blocks] == ["Item=Wi | Price=d"]
+
+
+def test_csv_overgrown_field_fails_typed() -> None:
+    from ingestion.parsers.spreadsheet import MAX_FIELD_CHARS
+
+    with pytest.raises(ExtractionFailed) as excinfo:
+        _extract("text/csv", b"A\n" + b"x" * (MAX_FIELD_CHARS + 1), "huge.csv")
+    assert excinfo.value.reason == "corrupt_csv"
+
+
+def test_csv_large_file_is_truncated_with_warning() -> None:
+    from ingestion.parsers.spreadsheet import MAX_SHEET_ROWS
+
+    body = b"Item,Price\n" + b"".join(
+        b"Widget,%d\n" % index for index in range(MAX_SHEET_ROWS + 5)
+    )
+    doc = _extract("text/csv", body, "large.csv")
+
+    assert len(doc.blocks) == MAX_SHEET_ROWS
+    assert doc.warnings == ["rows_truncated"]
+
+
+def test_xlsx_and_csv_uploads_accepted(db, store_root, workspace) -> None:
+    from ingestion.uploads import register_upload
+
+    async def run(uow, store: ObjectStore, filename: str, data: bytes) -> object:
+        return await register_upload(
+            uow,
+            EventWriter(),
+            store,
+            context=AccessContext(
+                user_id=workspace["owner_id"],
+                workspace_id=workspace["workspace_id"],
+                role="owner",
+            ),
+            collection_id=workspace["collection_id"],
+            name="Sheet",
+            filename=filename,
+            data=data,
+        )
+
+    async def run_all() -> list[object]:
+        engine = create_async_engine(db.database_url)
+        uow = UnitOfWork(engine)
+        store = ObjectStore(store_root)
+        try:
+            return [
+                await run(uow, store, "sheet.xlsx", _xlsx([["A"], [1]])),
+                await run(uow, store, "sheet.csv", b"A,B\n1,2\n"),
+            ]
+        finally:
+            await engine.dispose()
+
+    accepted = asyncio.run(run_all())
+
+    assert [upload.media_type for upload in accepted] == [
+        XLSX_MEDIA,
+        "text/csv",
+    ]
