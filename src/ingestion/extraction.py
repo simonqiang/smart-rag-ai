@@ -22,6 +22,7 @@ from ingestion.parsers.basic import (
     parse_pdf,
     parse_text,
 )
+from ingestion.parsers.html import parse_html
 
 __all__ = [
     "LANGUAGES",
@@ -71,6 +72,7 @@ _PARSERS = {
     "text/plain": parse_text,
     "text/markdown": parse_markdown,
     "application/pdf": parse_pdf,
+    "text/html": parse_html,
 }
 
 

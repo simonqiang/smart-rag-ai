@@ -36,11 +36,13 @@ MEDIA_TYPES = {
     ".txt": "text/plain",
     ".md": "text/markdown",
     ".markdown": "text/markdown",
+    ".html": "text/html",
+    ".htm": "text/html",
 }
 
 REJECTION_MESSAGES = {
     "over_limit": "file exceeds the 50 MB upload limit",
-    "unsupported_type": "unsupported file type; supported: PDF, TXT, Markdown",
+    "unsupported_type": "unsupported file type; supported: PDF, TXT, Markdown, HTML",
     "corrupt_pdf": "file is not a valid PDF (missing %PDF- header)",
     "encrypted_pdf": "password-protected PDFs are not supported; remove protection and retry",
 }
