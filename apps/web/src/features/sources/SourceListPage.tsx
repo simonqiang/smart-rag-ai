@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import DeleteSourceDialog from "./DeleteSourceDialog";
 import UploadSource from "./UploadSource";
 import VersionHistory from "./VersionHistory";
+import WebSyncPanel from "./WebSyncPanel";
 import { detailText, getJson, postJson } from "../auth/api";
 
 type Source = {
@@ -109,6 +110,7 @@ export default function SourceListPage() {
           ))}
         </ul>
       )}
+      <WebSyncPanel canManage={canUpload} />
     </main>
   );
 }

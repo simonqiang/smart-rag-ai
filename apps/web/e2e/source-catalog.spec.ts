@@ -118,6 +118,10 @@ test("catalog failure shows an actionable error and recovers on retry", async ({
   page,
 }) => {
   let failing = true;
+  // The sources page also hosts the website-sync panel (Task 21c).
+  await page.route("**/api/web-sync", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
+  );
   await page.route(sourcesRoute, (route) => {
     if (failing) {
       return route.fulfill({
