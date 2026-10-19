@@ -25,6 +25,7 @@ from ingestion.parsers.basic import (
 from ingestion.parsers.html import parse_html
 from ingestion.parsers.ocr import parse_image
 from ingestion.parsers.office import parse_docx, parse_pptx
+from ingestion.parsers.snapshot import SNAPSHOT_MEDIA_TYPE, parse_snapshot
 from ingestion.parsers.spreadsheet import parse_csv, parse_xlsx
 
 __all__ = [
@@ -85,6 +86,7 @@ _PARSERS = {
     "image/webp": parse_image,
     "image/tiff": parse_image,
     "image/bmp": parse_image,
+    SNAPSHOT_MEDIA_TYPE: parse_snapshot,
 }
 
 
