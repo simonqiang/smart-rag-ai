@@ -21,24 +21,26 @@ class CrawlLimits:
     max_response_bytes: int = 10 * 1024 * 1024
 
 
-@dataclass(frozen=True)
 class BlockedUrl(Exception):
-    """A URL or resolved destination the policy refuses, with the reason."""
+    """A URL or resolved destination the policy refuses, with the reason.
 
-    url: str
-    reason: str
+    A plain Exception, not a frozen dataclass: frozen instances reject the
+    interpreter's ``__traceback__`` bookkeeping once they escape a scope.
+    """
 
-    def __str__(self) -> str:
-        return f"blocked ({self.reason}): {self.url}"
+    def __init__(self, url: str, reason: str) -> None:
+        super().__init__(f"blocked ({reason}): {url}")
+        self.url = url
+        self.reason = reason
 
 
 def _is_non_global(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     # Explicit flags rather than is_global: their semantics drifted across
     # Python versions and the deny list must stay deterministic. IPv4-mapped
     # IPv6 is unwrapped so ::ffff:10.0.0.1 cannot smuggle a private v4 target.
-    if isinstance(address, ipaddress.IPv6Address):
-        if address.ipv4_mapped is not None:
-            address = address.ipv4_mapped
+    mapped = address.ipv4_mapped if isinstance(address, ipaddress.IPv6Address) else None
+    if mapped is not None:
+        address = mapped
     return (
         address.is_private
         or address.is_loopback
