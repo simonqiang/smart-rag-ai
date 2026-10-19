@@ -17,8 +17,8 @@ from identity_access.setup import create_first_owner
 from source_catalog.catalog import create_collection
 
 WEB_SYNC_TABLES = (
-    "index_chunks, index_generations, source_versions, sources, collections, "
-    "invitations, sessions, users, workspaces, jobs, outbox"
+    "index_chunks, index_generations, source_versions, site_sync_schedules, sources, "
+    "collections, invitations, sessions, users, workspaces, jobs, outbox"
 )
 
 
