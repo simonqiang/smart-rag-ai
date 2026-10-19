@@ -15,6 +15,7 @@ import asyncio
 import logging
 from datetime import UTC, date, datetime
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from apps.worker.broker import build_broker
@@ -45,6 +46,34 @@ async def schedule_daily_retention_purge(engine: AsyncEngine) -> date:
     return today
 
 
+async def schedule_due_site_syncs(engine: AsyncEngine) -> int:
+    """Enqueue one ``site_sync`` job per due window (Task 21b).
+
+    The idempotency key is the (schedule, window) pair, so restarts and the
+    one-second poll cannot double-enqueue; claiming the window bumps
+    ``next_sync_at``, which changes the key for the next interval.
+    """
+    async with engine.begin() as connection:
+        rows = (
+            await connection.execute(
+                text(
+                    "SELECT id, next_sync_at FROM site_sync_schedules "
+                    "WHERE enabled AND next_sync_at <= now()"
+                )
+            )
+        ).all()
+        for row in rows:
+            await JobQueue().enqueue(
+                JobCommand(
+                    type="site_sync",
+                    payload={"schedule_id": str(row.id)},
+                    idempotency_key=f"site_sync:{row.id}:{row.next_sync_at.isoformat()}",
+                ),
+                connection,
+            )
+    return len(rows)
+
+
 async def _loop(engine, broker) -> None:
     dispatcher = JobDispatcher(engine, broker)
     scheduled: date | None = None
@@ -62,6 +91,10 @@ async def _loop(engine, broker) -> None:
                 scheduled = await schedule_daily_retention_purge(engine)
         except Exception:
             logger.exception("daily retention scheduling failed; retrying next tick")
+        try:
+            await schedule_due_site_syncs(engine)
+        except Exception:
+            logger.exception("due site sync scheduling failed; retrying next tick")
         await asyncio.sleep(POLL_SECONDS)
 
 

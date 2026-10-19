@@ -49,6 +49,10 @@ class ScheduleNotFound(Exception):
     """Unknown schedule ID; callers map this to the generic 404."""
 
 
+class ScheduleDisabled(Exception):
+    """Run-now was requested for a disabled schedule."""
+
+
 class CutoverPending(Exception):
     """The replacement is not validated yet; the delivery should retry."""
 
@@ -147,7 +151,9 @@ async def schedule_sync(
                 {"id": collection_id},
             )
         ).scalar_one_or_none()
-        if collection is None or str(collection) != context.workspace_id:
+        if collection is None:
+            raise CollectionNotFound(collection_id)
+        if str(collection) != context.workspace_id:
             raise CollectionNotFound(collection_id)
         await transaction.execute(
             text(
@@ -206,6 +212,109 @@ async def schedule_sync(
         last_detail=None,
         creator_id=context.user_id,
     )
+
+
+async def list_schedules(
+    uow: UnitOfWork, *, workspace_id: str, collection_ids: list[str]
+) -> list[SyncSchedule]:
+    """Freshness list scoped to the caller's permitted collections."""
+    if not collection_ids:
+        return []
+    async with uow.transaction() as connection:
+        rows = (
+            await connection.execute(
+                text(
+                    f"SELECT {_FIELDS} FROM site_sync_schedules "
+                    "WHERE workspace_id = :ws "
+                    "AND collection_id = ANY(CAST(:ids AS uuid[])) ORDER BY name"
+                ),
+                {"ws": workspace_id, "ids": collection_ids},
+            )
+        ).mappings().all()
+    return [_schedule(row) for row in rows]
+
+
+async def _owned_schedule(
+    transaction, context: AccessContext, schedule_id: str
+) -> SyncSchedule:
+    """Load the schedule inside a transaction; foreign IDs look unknown."""
+    row = (
+        await transaction.execute(
+            text(f"SELECT {_FIELDS} FROM site_sync_schedules WHERE id = :id FOR UPDATE"),
+            {"id": schedule_id},
+        )
+    ).mappings().first()
+    if row is None:
+        raise ScheduleNotFound(schedule_id)
+    if str(row["workspace_id"]) != context.workspace_id:
+        raise ScheduleNotFound(schedule_id)
+    return _schedule(row)
+
+
+async def request_sync(
+    uow: UnitOfWork,
+    writer: EventWriter,
+    *,
+    context: AccessContext,
+    schedule_id: str,
+    now: datetime,
+) -> SyncSchedule:
+    """Run-now (owner/admin): dispatch a forced sync job from the outbox."""
+    authorize("source.update", ProtectedResource(context.workspace_id), context)
+    async with uow.transaction() as transaction:
+        schedule = await _owned_schedule(transaction, context, schedule_id)
+        disabled = not schedule.enabled
+        if disabled:
+            raise ScheduleDisabled(schedule_id)
+        await JobQueue().enqueue(
+            JobCommand(
+                type=SYNC_JOB,
+                payload={"schedule_id": schedule_id, "force": True},
+                idempotency_key=f"{SYNC_JOB}:{schedule_id}:manual:{uuid.uuid4()}",
+            ),
+            transaction,
+        )
+        await writer.record(
+            AuditEvent(
+                type="site.sync_requested", actor=context.user_id, subject=schedule_id,
+                metadata={},
+            ),
+            transaction,
+        )
+    return schedule
+
+
+async def set_schedule_enabled(
+    uow: UnitOfWork,
+    writer: EventWriter,
+    *,
+    context: AccessContext,
+    schedule_id: str,
+    enabled: bool,
+    now: datetime,
+) -> SyncSchedule:
+    """Pause or resume the automatic windows (owner/admin)."""
+    authorize("source.update", ProtectedResource(context.workspace_id), context)
+    async with uow.transaction() as transaction:
+        schedule = await _owned_schedule(transaction, context, schedule_id)
+        changed = schedule.enabled != enabled
+        if changed:
+            await transaction.execute(
+                text(
+                    "UPDATE site_sync_schedules SET enabled = :enabled, "
+                    "updated_at = now() WHERE id = :id"
+                ),
+                {"enabled": enabled, "id": schedule_id},
+            )
+            await writer.record(
+                AuditEvent(
+                    type="site.schedule_updated", actor=context.user_id,
+                    subject=schedule_id, metadata={"enabled": enabled},
+                ),
+                transaction,
+            )
+        schedule = await _owned_schedule(transaction, context, schedule_id)
+    return schedule
 
 
 async def run_sync(

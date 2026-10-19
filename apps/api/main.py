@@ -33,12 +33,14 @@ from apps.api.routes import source_versions as source_version_routes
 from apps.api.routes import sources as source_routes
 from apps.api.routes import uploads as upload_routes
 from apps.api.routes import users as user_routes
+from apps.api.routes import web_sync as web_sync_routes
 from foundation.config import Settings
 from identity_access.authorization import AccessDenied
 from identity_access.grants import TargetNotFound
 from retrieval_answering.retrieval import EmptyQueryError
 from source_catalog.catalog import CollectionNotFound, SourceNotFound
 from source_catalog.version_service import VersionNotReady
+from web_sync.scheduler import ScheduleNotFound
 
 correlation_id: ContextVar[str] = ContextVar("correlation_id", default="-")
 
@@ -143,6 +145,7 @@ app.include_router(ask_routes.router)
 app.include_router(conversation_routes.router)
 app.include_router(index_generation_routes.router)
 app.include_router(settings_routes.router)
+app.include_router(web_sync_routes.router)
 
 
 @app.exception_handler(TargetNotFound)
@@ -162,6 +165,13 @@ async def _collection_not_found(
     _request: Request, _exc: CollectionNotFound
 ) -> JSONResponse:
     return JSONResponse(status_code=404, content={"detail": "no such collection"})
+
+
+@app.exception_handler(ScheduleNotFound)
+async def _schedule_not_found(
+    _request: Request, _exc: ScheduleNotFound
+) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": "no such schedule"})
 
 
 @app.exception_handler(VersionNotReady)

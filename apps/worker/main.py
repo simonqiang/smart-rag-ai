@@ -23,6 +23,7 @@ from apps.worker.tasks import (
     extract,  # noqa: F401
     index,  # noqa: F401
     retention_purge,  # noqa: F401
+    sync_site,  # noqa: F401
 )
 
 
