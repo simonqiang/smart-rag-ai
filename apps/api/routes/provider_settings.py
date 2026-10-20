@@ -66,6 +66,9 @@ def _payload(state: GenerationProviderState) -> dict:
         "rewrite_enabled": state.rewrite_enabled,
         "consent_version": state.consent_version,
         "consented_at": state.consented_at.isoformat() if state.consented_at else None,
+        # The version the settings screen's consent checkbox binds to; the
+        # stored consent_version above is what was accepted, not what is due.
+        "consent_version_current": CONSENT_VERSION,
     }
 
 

@@ -22,6 +22,7 @@ const links = [
   { href: "/activity", label: "Activity" },
   { href: "/users", label: "User access" },
   { href: "/settings/retention", label: "Retention" },
+  { href: "/settings/ai-provider", label: "AI provider" },
 ];
 
 /** Responsive application shell: wrap-around navigation for signed-in pages. */

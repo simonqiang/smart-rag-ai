@@ -5,6 +5,7 @@ import AskPage from "./features/ask/AskPage";
 import ActivityPage from "./features/activity/ActivityPage";
 import UserAccessPage from "./features/settings/UserAccessPage";
 import RetentionSettings from "./features/settings/RetentionSettings";
+import AIProviderSettings from "./features/settings/AIProviderSettings";
 import SourceListPage from "./features/sources/SourceListPage";
 import { navigate, usePath } from "./router";
 
@@ -28,6 +29,12 @@ function App() {
     return (
       <AppShell>
         <RetentionSettings />
+      </AppShell>
+    );
+  if (path === "/settings/ai-provider")
+    return (
+      <AppShell>
+        <AIProviderSettings />
       </AppShell>
     );
   if (path === "/activity")

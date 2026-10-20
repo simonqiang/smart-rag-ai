@@ -122,6 +122,7 @@ def _activate(client: TestClient, *, rewrite_enabled: bool):
 DEFAULT_STATE = {
     "provider": "ollama", "endpoint": None, "model": None,
     "rewrite_enabled": False, "consent_version": None, "consented_at": None,
+    "consent_version_current": CONSENT_VERSION,
 }
 
 
