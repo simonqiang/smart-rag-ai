@@ -8,8 +8,8 @@ Resume replays the stored answer for a request id; unknown or foreign
 requests get a typed ``unknown_request`` error frame. Audit metadata stays
 count-and-identifier only.
 
-Seams (``_generation``, ``_embeddings``, ``_profile``, ``_rewriter``) are
-module-level for tests, like ``uow``. ``cancelled`` frames: a client abort
+Seams (``_generation``, ``_embeddings``, ``_profile``, ``_rewriter``,
+``_glm_transport``) are module-level for tests, like ``uow``. ``cancelled`` frames: a client abort
 closes the SSE body, which cancels generation at the next chunk boundary —
 the client renders its own cancelled state (spec §15 streaming contract).
 """
@@ -17,6 +17,7 @@ the client renders its own cancelled state (spec §15 streaming contract).
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import replace
@@ -27,7 +28,15 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ai_providers.contracts import EmbeddingProvider, GenerationProvider
+from ai_providers.glm import (
+    GLM_API_KEY_ENV,
+    GLMConfig,
+    GLMGenerationProvider,
+    GLMQueryRewriter,
+    _Transport,
+)
 from ai_providers.ollama import OllamaEmbeddingProvider, OllamaGenerationProvider
+from ai_providers.provider_settings import get_generation_provider_state
 from apps.api.routes.auth import uow
 from apps.api.routes.sources import catalog_context
 from apps.api.routes.users import ready_user
@@ -55,13 +64,11 @@ from retrieval_answering.retrieval import retrieve
 
 router = APIRouter(prefix="/api")
 
-# Task 23 flips this when a hosted GLM profile is consented to.
-PROVIDER_BADGE = {"name": "ollama", "local": True}
-
 _generation: GenerationProvider | None = None
 _embeddings: EmbeddingProvider | None = None
 _profile: ModelProfile | None = None
 _rewriter: QueryRewriter | None = None
+_glm_transport: _Transport | None = None  # test seam; None = production transport
 
 
 def generation() -> GenerationProvider:
@@ -91,6 +98,30 @@ def profile() -> ModelProfile:
 
 def rewriter() -> QueryRewriter | None:
     return _rewriter
+
+
+async def _providers(
+    workspace_id: str,
+) -> tuple[GenerationProvider, QueryRewriter | None, dict]:
+    """Generation, rewriter, and badge from the stored provider state (23c).
+
+    GLM is constructed per request from the settings row, so activation
+    takes effect without a restart; its failures propagate as the
+    pipeline's typed error frame — there is no fallback to Ollama. The
+    API key is read from the environment at call time by the adapter.
+    """
+    state = await get_generation_provider_state(uow(), workspace_id=workspace_id)
+    if state.provider != "glm":
+        return generation(), _rewriter, {"name": "ollama", "local": True}
+    config = GLMConfig(base_url=state.endpoint or "", model=state.model or "")
+    api_key = os.environ.get(GLM_API_KEY_ENV)
+    return (
+        GLMGenerationProvider(config, transport=_glm_transport, api_key=api_key),
+        GLMQueryRewriter(config, transport=_glm_transport, api_key=api_key)
+        if state.rewrite_enabled
+        else None,
+        {"name": "glm", "local": False},
+    )
 
 
 class AskRequest(BaseModel):
@@ -134,7 +165,8 @@ async def ask(
         )
         history = ConversationContext()
 
-    query = _rewriter.rewrite(question, history) if _rewriter else question
+    ask_generation, ask_rewriter, badge = await _providers(context.workspace_id)
+    query = ask_rewriter.rewrite(question, history) if ask_rewriter else question
     ranked = await retrieve(
         uow(), embeddings(), context=context, query=query,
         profile=profile(), source_id=body.source_id,
@@ -150,6 +182,8 @@ async def ask(
                 context=context,
                 conversation_id=conversation_id,
                 request_id=request_id,
+                generation_provider=ask_generation,
+                badge=badge,
             ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-store"},
@@ -157,7 +191,7 @@ async def ask(
 
     try:
         result = answer(
-            question, ranked, generation=generation(), history=history,
+            question, ranked, generation=ask_generation, history=history,
             request_id=request_id,
         )
     except CitationError as failure:
@@ -180,7 +214,7 @@ async def ask(
             "citations": [citation.to_json() for citation in result.citations],
         },
         "insufficient_evidence": result.insufficient_evidence,
-        "provider": PROVIDER_BADGE,
+        "provider": badge,
     }
 
 
@@ -192,9 +226,11 @@ async def _streaming_exchange(
     context,
     conversation_id: str,
     request_id: str,
+    generation_provider: GenerationProvider,
+    badge: dict,
 ):
     events = stream_answer(
-        question, ranked, generation=generation(), history=history,
+        question, ranked, generation=generation_provider, history=history,
         request_id=request_id, conversation_id=conversation_id,
     )
     language = "en"
@@ -209,7 +245,7 @@ async def _streaming_exchange(
             if event.kind == "completed":
                 completed = event
                 # The badge is route state (Task 23), not an answering concern.
-                event = replace(event, provider=PROVIDER_BADGE)
+                event = replace(event, provider=badge)
             yield _sse(event)
     finally:
         if completed is not None:
