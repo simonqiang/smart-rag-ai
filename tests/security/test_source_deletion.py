@@ -598,7 +598,7 @@ def test_stuck_backup_fails_verification_and_retry_records_zero_counts(
     """A purge port that cannot remove the backup must abort before any row goes."""
 
     class StuckInventory(InMemoryManagedBackupInventory):
-        def purge_containing(self, source_id: str) -> int:
+        async def purge_containing(self, source_id: str) -> int:
             return 0  # pretends to purge, removes nothing
 
     async def attempt(engine, uow, store) -> object:
@@ -673,6 +673,7 @@ def test_actor_composes_settings_store_and_purge(
     class FakeSettings:
         database_url = db.database_url
         data_dir = str(store_root)
+        backup_dir = str(store_root / "backups")
 
         @classmethod
         def load(cls) -> "FakeSettings":

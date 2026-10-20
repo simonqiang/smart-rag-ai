@@ -17,6 +17,7 @@ dependencies = [
     "docling>=2.134.0",
     "charset-normalizer>=3.5.2",
     "pytesseract>=0.3.13",
+    "cryptography>=44.0",
     "torch==2.14.1",
 ]
 

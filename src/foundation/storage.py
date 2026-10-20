@@ -68,9 +68,9 @@ class ManagedBackup:
 
 
 class ManagedBackupInventory(Protocol):
-    def list_containing(self, source_id: str) -> list[ManagedBackup]: ...
+    async def list_containing(self, source_id: str) -> list[ManagedBackup]: ...
 
-    def purge_containing(self, source_id: str) -> int: ...
+    async def purge_containing(self, source_id: str) -> int: ...
 
 
 class InMemoryManagedBackupInventory:
@@ -79,10 +79,10 @@ class InMemoryManagedBackupInventory:
     def __init__(self, backups: list[ManagedBackup] | None = None) -> None:
         self._backups = list(backups or [])
 
-    def list_containing(self, source_id: str) -> list[ManagedBackup]:
+    async def list_containing(self, source_id: str) -> list[ManagedBackup]:
         return [backup for backup in self._backups if source_id in backup.source_ids]
 
-    def purge_containing(self, source_id: str) -> int:
-        doomed = self.list_containing(source_id)
+    async def purge_containing(self, source_id: str) -> int:
+        doomed = await self.list_containing(source_id)
         self._backups = [backup for backup in self._backups if backup not in doomed]
         return len(doomed)

@@ -138,7 +138,7 @@ async def delete_source(
         # Unknown, never requested, or already fully purged: nothing to do.
         return _zero_evidence(str(source_id))
 
-    backups = inventory.purge_containing(source_id)
+    backups = await inventory.purge_containing(source_id)
 
     # Manifests are content-addressed: an object shared with another source
     # (duplicate upload) must survive, so delete only unreferenced addresses.
@@ -221,7 +221,7 @@ async def delete_source(
                 {"id": source_id},
             )
         ).scalar_one()
-        remaining_backups = len(inventory.list_containing(source_id))
+        remaining_backups = len(await inventory.list_containing(source_id))
         residue = int(remaining_chunks) + int(remaining_generations) + remaining_backups
         if residue:
             raise DeletionIncomplete(

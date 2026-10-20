@@ -16,7 +16,7 @@ from source_catalog.catalog import create_collection
 
 OPERATIONS_TABLES = (
     "index_chunks, index_generations, source_versions, site_sync_schedules, sources, "
-    "collections, invitations, sessions, users, workspaces, jobs, outbox"
+    "collections, invitations, sessions, users, workspaces, jobs, outbox, managed_backups"
 )
 
 

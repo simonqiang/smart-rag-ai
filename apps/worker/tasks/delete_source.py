@@ -20,7 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from foundation.config import Settings
 from foundation.events import EventWriter
 from foundation.jobs import JobClaims, Lease
-from foundation.storage import InMemoryManagedBackupInventory, ObjectStore
+from foundation.storage import ObjectStore
+from operations.backup import DbManagedBackupInventory
 from source_catalog.deletion import DeletionIncomplete, delete_source
 
 TYPE = "source_delete"
@@ -50,15 +51,15 @@ def _engine(database_url: str) -> AsyncEngine:
 
 
 async def delete_payload(engine: AsyncEngine, store: ObjectStore, payload: dict) -> str:
+    settings = Settings.load()
     claims = JobClaims(engine)
     job_id = uuid.UUID(str(payload["job_id"]))
     lease = await claims.claim(job_id)
     if not isinstance(lease, Lease):  # another consumer holds it, or it is done
         return "skipped"
 
-    # ponytail: the in-memory inventory purges nothing across processes;
-    # Task 24's real backup implementation replaces it at this seam.
-    inventory = InMemoryManagedBackupInventory()
+    # Real Task 24 inventory: deletion purges managed backups from disk.
+    inventory = DbManagedBackupInventory(engine, Path(settings.backup_dir))
     try:
         evidence = await delete_source(
             engine, store, inventory, EventWriter(),

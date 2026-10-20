@@ -492,28 +492,31 @@ def test_object_store_is_manifest_addressed_and_checksum_verifying(tmp_path: Pat
 
 
 def test_backup_inventory_is_deletion_aware() -> None:
-    inventory = InMemoryManagedBackupInventory(
-        [
-            ManagedBackup(
-                id="b1",
-                path="backups/nightly.tar.enc",
-                created_at=datetime.now(UTC),
-                source_ids=frozenset({"s1", "s2"}),
-            ),
-            ManagedBackup(
-                id="b2",
-                path="backups/weekly.tar.enc",
-                created_at=datetime.now(UTC),
-                source_ids=frozenset({"s3"}),
-            ),
-        ]
-    )
+    async def exercise() -> None:
+        inventory = InMemoryManagedBackupInventory(
+            [
+                ManagedBackup(
+                    id="b1",
+                    path="backups/nightly.tar.enc",
+                    created_at=datetime.now(UTC),
+                    source_ids=frozenset({"s1", "s2"}),
+                ),
+                ManagedBackup(
+                    id="b2",
+                    path="backups/weekly.tar.enc",
+                    created_at=datetime.now(UTC),
+                    source_ids=frozenset({"s3"}),
+                ),
+            ]
+        )
 
-    assert [backup.id for backup in inventory.list_containing("s1")] == ["b1"]
+        assert [backup.id for backup in await inventory.list_containing("s1")] == ["b1"]
 
-    purged = inventory.purge_containing("s2")
+        purged = await inventory.purge_containing("s2")
 
-    assert purged == 1
-    assert inventory.list_containing("s1") == []
-    assert [backup.id for backup in inventory.list_containing("s3")] == ["b2"]
-    assert inventory.purge_containing("s2") == 0  # idempotent
+        assert purged == 1
+        assert await inventory.list_containing("s1") == []
+        assert [backup.id for backup in await inventory.list_containing("s3")] == ["b2"]
+        assert await inventory.purge_containing("s2") == 0  # idempotent
+
+    asyncio.run(exercise())
