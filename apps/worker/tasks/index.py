@@ -82,13 +82,13 @@ async def index_payload(
             )
         ).mappings().first()
     if version is None:
-        await claims.fail(lease)
+        await claims.fail(lease, detail="missing_version")
         return "missing_version"
     if version["state"] in ("indexed", "active"):
         await claims.complete(lease)
         return "already_indexed"
     if version["state"] != "extracted":
-        await claims.fail(lease)
+        await claims.fail(lease, detail=f"not_indexable:{version['state']}")
         return f"not_indexable:{version['state']}"
 
     try:
@@ -107,12 +107,12 @@ async def index_payload(
         )
     except IndexingError as failure:
         await _fail_version(engine, payload["version_id"], failure.reason)
-        await claims.fail(lease)
+        await claims.fail(lease, detail=failure.reason)
         return f"failed:{failure.reason}"
     except EmbeddingDimensionError as failure:
         # Persistent provider/profile mismatch: retrying cannot fix it.
         await _fail_version(engine, payload["version_id"], failure.reason)
-        await claims.fail(lease)
+        await claims.fail(lease, detail=failure.reason)
         return f"failed:{failure.reason}"
 
     if await _job_status(engine, job_id) == "cancelled":

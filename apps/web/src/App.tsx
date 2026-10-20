@@ -2,6 +2,7 @@ import AppShell from "./AppShell";
 import SetupPage from "./features/auth/SetupPage";
 import SignInPage from "./features/auth/SignInPage";
 import AskPage from "./features/ask/AskPage";
+import ActivityPage from "./features/activity/ActivityPage";
 import UserAccessPage from "./features/settings/UserAccessPage";
 import RetentionSettings from "./features/settings/RetentionSettings";
 import SourceListPage from "./features/sources/SourceListPage";
@@ -27,6 +28,12 @@ function App() {
     return (
       <AppShell>
         <RetentionSettings />
+      </AppShell>
+    );
+  if (path === "/activity")
+    return (
+      <AppShell>
+        <ActivityPage />
       </AppShell>
     );
   if (path === "/sources")

@@ -89,7 +89,7 @@ async def sync_payload(engine: AsyncEngine, store: ObjectStore, payload: dict) -
     except ScheduleNotFound:
         # The schedule cascaded away with its source (Task 17 purge);
         # the delivery must not retry a job that can never succeed.
-        await claims.fail(lease)
+        await claims.fail(lease, detail="schedule_missing")
         return "gone"
     await claims.complete(lease)
     return outcome
@@ -109,7 +109,7 @@ async def cutover_payload(engine: AsyncEngine, payload: dict) -> str:
             now=datetime.now(UTC),
         )
     except CutoverPending:
-        await claims.retry(lease)  # redeliver once the chain validates
+        await claims.retry(lease, detail="cutover_pending")  # redeliver once the chain validates
         raise
     await claims.complete(lease)
     return outcome

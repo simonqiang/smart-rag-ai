@@ -172,23 +172,30 @@ class JobClaims:
     async def complete(self, lease: Lease) -> bool:
         return await self._finish(lease, "completed")
 
-    async def fail(self, lease: Lease) -> bool:
-        return await self._finish(lease, "failed")
+    async def fail(self, lease: Lease, detail: str | None = None) -> bool:
+        return await self._finish(lease, "failed", detail)
 
-    async def retry(self, lease: Lease) -> bool:
-        return await self._finish(lease, "pending")
+    async def retry(self, lease: Lease, detail: str | None = None) -> bool:
+        return await self._finish(lease, "pending", detail)
 
-    async def _finish(self, lease: Lease, status: str) -> bool:
+    async def _finish(self, lease: Lease, status: str, detail: str | None = None) -> bool:
+        # ``detail`` is a typed reason from the worker — never raw exception text.
         async with self._engine.begin() as connection:
             result = (
                 await connection.execute(
                     text(
                         "UPDATE jobs SET status = :status, lease_owner = NULL, "
-                        "lease_expires_at = NULL, updated_at = now() "
+                        "lease_expires_at = NULL, "
+                        "last_error = COALESCE(:detail, last_error), updated_at = now() "
                         "WHERE id = :id AND lease_owner = :token AND status = 'running' "
                         "RETURNING id"
                     ),
-                    {"status": status, "id": str(lease.job_id), "token": lease.token},
+                    {
+                        "status": status,
+                        "detail": detail,
+                        "id": str(lease.job_id),
+                        "token": lease.token,
+                    },
                 )
             ).first()
         return result is not None

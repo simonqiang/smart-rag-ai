@@ -55,7 +55,7 @@ async def purge_payload(engine: AsyncEngine, store: ObjectStore, payload: dict) 
     try:
         evidence = await run_retention_purge(engine, store, EventWriter())
     except RetentionIncomplete:
-        await claims.retry(lease)
+        await claims.retry(lease, detail="retention_incomplete")
         raise
     await claims.complete(lease)
     return f"purged:{evidence.versions}"

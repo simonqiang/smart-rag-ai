@@ -34,6 +34,8 @@ MINIMUM_ROLE = {
     "source.delete": "owner",
     "index.rebuild": "owner",
     "retention.update": "owner",
+    "operations.read": "admin",
+    "operations.retry": "admin",
 }
 
 # Actions that may never target the actor themselves.

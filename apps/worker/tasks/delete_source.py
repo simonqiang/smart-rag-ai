@@ -65,7 +65,7 @@ async def delete_payload(engine: AsyncEngine, store: ObjectStore, payload: dict)
             source_id=str(payload["source_id"]),
         )
     except DeletionIncomplete:
-        await claims.retry(lease)
+        await claims.retry(lease, detail="deletion_incomplete")
         raise
     await claims.complete(lease)
     return f"deleted:{evidence.versions}"

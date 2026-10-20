@@ -68,7 +68,7 @@ async def extract_version(engine: AsyncEngine, store: ObjectStore, payload: dict
             )
         ).mappings().first()
     if version is None:
-        await claims.fail(lease)
+        await claims.fail(lease, detail="missing_version")
         return "missing_version"
     if version["state"] == "extracted":
         await claims.complete(lease)
@@ -86,7 +86,7 @@ async def extract_version(engine: AsyncEngine, store: ObjectStore, payload: dict
             engine, payload["version_id"], "failed",
             {"reason": failure.reason}, "source.extraction_failed",
         )
-        await claims.fail(lease)
+        await claims.fail(lease, detail=failure.reason)
         return f"failed:{failure.reason}"
 
     if await _job_status(engine, job_id) == "cancelled":
