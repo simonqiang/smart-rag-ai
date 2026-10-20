@@ -146,10 +146,11 @@ def test_due_scan_enqueues_once_per_window(db, workspace) -> None:
     )) == 1
     assert len(_rows("SELECT id FROM outbox WHERE topic = 'site_sync'")) == 1
 
-    # Not-due schedules are never enqueued.
+    # Not-due schedules are never enqueued (the window is relative to real
+    # time: T0 is a fixed date and would age into the past).
     _execute(
         "UPDATE site_sync_schedules SET next_sync_at = :future WHERE id = :id",
-        {"future": T0 + timedelta(hours=2), "id": schedule_id},
+        {"future": datetime.now(UTC) + timedelta(hours=2), "id": schedule_id},
     )
     assert asyncio.run(run()) == (0, 0)
 

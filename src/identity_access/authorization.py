@@ -34,6 +34,7 @@ MINIMUM_ROLE = {
     "source.delete": "owner",
     "index.rebuild": "owner",
     "retention.update": "owner",
+    "provider.update": "owner",
     "operations.read": "admin",
     "operations.retry": "admin",
 }
