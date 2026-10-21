@@ -84,8 +84,9 @@ test-integration: quiet-stack
 test-security: quiet-stack
 	$(PYTEST) tests/security -q
 
-test-performance:
+test-performance: quiet-stack
 	$(PYTHON) scripts/perf_budget.py
+	$(PYTEST) tests/performance -q
 
 test-e2e:
 	cd apps/web && npx playwright test $(addprefix --project ,$(SMOKE_PROJECTS))

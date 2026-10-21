@@ -66,7 +66,9 @@ def test_baseline_perfect_results_pass_all_thresholds():
     results = [EvaluationResult(**raw) for raw in load_jsonl(FIXTURES / "baseline_results.jsonl")]
     report = evaluate(cases, results)
     assert report.passed
-    assert json.loads(report.to_json())["strata"]["aggregate"]["case_count"] == 25
+    assert json.loads(report.to_json())["strata"]["aggregate"]["case_count"] == 30
+    for lang in (*LANGUAGES, "aggregate"):
+        assert stratum(report, lang).grounded_acceptance == 1.0
 
 
 def test_below_profile_fixture_fails():

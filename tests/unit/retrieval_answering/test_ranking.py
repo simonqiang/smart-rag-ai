@@ -2,7 +2,11 @@
 
 import pytest
 
-from retrieval_answering.ranking import reciprocal_rank_fusion
+from retrieval_answering.ranking import (
+    CONFIDENCE_THRESHOLD,
+    has_confident_evidence,
+    reciprocal_rank_fusion,
+)
 
 
 def test_semantic_and_keyword_rankings_fuse_with_dedupe() -> None:
@@ -33,3 +37,14 @@ def test_single_channel_and_empty_inputs() -> None:
     assert reciprocal_rank_fusion([["a", "b"]])[0] == ("a", 1 / 61)
     assert reciprocal_rank_fusion([]) == []
     assert reciprocal_rank_fusion([[]]) == []
+
+
+def test_confidence_threshold_requires_multi_channel_agreement() -> None:
+    # Single-channel rank-1 hit stays below CONFIDENCE_THRESHOLD;
+    # dual-channel rank-1 agreement clears it.
+    single = [score for _id, score in reciprocal_rank_fusion([["a"]])]
+    dual = [score for _id, score in reciprocal_rank_fusion([["a"], ["a"]])]
+    assert not has_confident_evidence([])
+    assert not has_confident_evidence(single)
+    assert has_confident_evidence(dual)
+    assert has_confident_evidence([CONFIDENCE_THRESHOLD])

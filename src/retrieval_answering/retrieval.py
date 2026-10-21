@@ -22,7 +22,11 @@ from foundation.unit_of_work import UnitOfWork
 from identity_access.authorization import AccessContext
 from ingestion.extraction import detect_language
 from knowledge_index.keywords import config_for, to_or_query
-from retrieval_answering.ranking import reciprocal_rank_fusion
+from retrieval_answering.ranking import (
+    CONFIDENCE_THRESHOLD,
+    has_confident_evidence,
+    reciprocal_rank_fusion,
+)
 
 __all__ = [
     "CONFIDENCE_THRESHOLD",
@@ -34,9 +38,6 @@ __all__ = [
 
 CANDIDATE_POOL = 20  # per-channel candidates before fusion
 DEFAULT_LIMIT = 10
-# RRF floor for "worth answering from": a chunk found by both channels at
-# rank 1 scores ~0.033; single-channel rank-1 tops out at 1/61 ≈ 0.016.
-CONFIDENCE_THRESHOLD = 0.02
 
 
 class EmptyQueryError(Exception):
@@ -66,7 +67,7 @@ class RankedEvidence:
 
     @property
     def is_confident(self) -> bool:
-        return bool(self.items) and self.items[0].score >= CONFIDENCE_THRESHOLD
+        return has_confident_evidence([item.score for item in self.items])
 
     def to_json(self) -> list[dict]:
         return [asdict(item) for item in self.items]

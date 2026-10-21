@@ -23,3 +23,8 @@
 {"case_id": "mixed-ambig-1", "ranked_passage_ids": ["mixed-ambig-1-d1"], "cited_passage_ids": [], "declared_insufficient": true, "grounded_accepted": null}
 {"case_id": "mixed-stale-1", "ranked_passage_ids": ["mixed-stale-1-v2", "mixed-stale-1-d1", "mixed-stale-1-d2", "mixed-stale-1-d3"], "cited_passage_ids": ["mixed-stale-1-v2"], "declared_insufficient": false, "grounded_accepted": null}
 {"case_id": "mixed-unauth-1", "ranked_passage_ids": ["mixed-unauth-1-d1"], "cited_passage_ids": [], "declared_insufficient": true, "grounded_accepted": null}
+{"case_id": "en-pos-2", "ranked_passage_ids": ["en-pos-2-p1"], "cited_passage_ids": ["en-pos-2-p1"], "declared_insufficient": false, "grounded_accepted": false}
+{"case_id": "zh-Hans-pos-2", "ranked_passage_ids": ["zh-Hans-pos-2-p1"], "cited_passage_ids": ["zh-Hans-pos-2-p1"], "declared_insufficient": false, "grounded_accepted": false}
+{"case_id": "zh-Hant-pos-2", "ranked_passage_ids": [], "cited_passage_ids": [], "declared_insufficient": false, "grounded_accepted": false}
+{"case_id": "ms-pos-2", "ranked_passage_ids": ["ms-pos-2-p1"], "cited_passage_ids": ["ms-pos-2-p1"], "declared_insufficient": false, "grounded_accepted": false}
+{"case_id": "mixed-pos-2", "ranked_passage_ids": ["mixed-pos-2-p1"], "cited_passage_ids": ["mixed-pos-2-p1"], "declared_insufficient": false, "grounded_accepted": false}
