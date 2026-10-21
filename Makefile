@@ -8,7 +8,7 @@ GATES := lint typecheck test-unit test-api test-web test-integration test-securi
 
 .PHONY: setup doctor test-doctor test-evaluation lint typecheck test-unit test-api test-web \
 	test-integration test-security test-performance test-e2e test-e2e-full coverage build scan \
-	check check-release $(GATES)
+	check check-release backup restore $(GATES)
 
 setup:
 	$(UV) sync
@@ -37,6 +37,12 @@ doctor:
 
 reset-owner-password:
 	$(PYTHON) infra/scripts/reset_owner_password.py
+
+backup:
+	$(PYTHON) infra/scripts/backup_restore.py create
+
+restore:
+	$(PYTHON) infra/scripts/backup_restore.py restore $(FILE)
 
 test-doctor:
 	$(PYTEST) tests/unit/foundation -v

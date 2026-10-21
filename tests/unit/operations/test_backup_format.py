@@ -99,3 +99,32 @@ def test_decrypt_rejects_checksum_mismatch(tmp_path) -> None:
 def test_serialize_refuses_unsupported_types() -> None:
     with pytest.raises(ValueError, match="unsupported column type"):
         backup._serialize(object())
+
+
+def _zip_payload(manifest: dict, members: dict[str, bytes] | None = None) -> bytes:
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("manifest.json", json.dumps(manifest))
+        for name, data in (members or {}).items():
+            archive.writestr(name, data)
+    return buffer.getvalue()
+
+
+def test_verify_bundle_refuses_foreign_payload() -> None:
+    bundle = _zip_payload({"format": "something-else", "format_version": 1, "members": {}})
+    with pytest.raises(backup.BackupCorrupt, match="not a smart-rag bundle"):
+        backup._verify_bundle(bundle)
+
+
+def test_verify_bundle_refuses_checksum_mismatch() -> None:
+    manifest = {
+        "format": backup.BUNDLE_FORMAT,
+        "format_version": backup.FORMAT_VERSION,
+        "members": {"tables/users.jsonl": "0" * 64},
+    }
+    bundle = _zip_payload(manifest, {"tables/users.jsonl": b"rows"})
+    with pytest.raises(backup.BackupCorrupt, match="failed its checksum"):
+        backup._verify_bundle(bundle)

@@ -30,6 +30,7 @@ from pathlib import Path
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from sqlalchemy import text
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from foundation.events import AuditEvent, EventWriter
@@ -57,6 +58,14 @@ class BackupKeyError(Exception):
 
 class BackupCorrupt(Exception):
     """The file is not a readable backup (bad magic, truncation, checksum)."""
+
+
+class BackupIncompatible(Exception):
+    """The backup's schema revision does not match this installation."""
+
+
+class TargetNotEmpty(Exception):
+    """Restore requires a clean installation; this one already has users."""
 
 
 def read_recovery_key() -> str:
@@ -299,6 +308,138 @@ def load_bundle(path: Path, recovery_key: str) -> tuple[dict, bytes]:
     """Authenticate, decrypt, and checksum-verify; returns header + bundle."""
     header, ciphertext = _read_envelope(path)
     return header, _decrypt(header, ciphertext, recovery_key)
+
+
+# Column types asyncpg refuses to bind as plain str/JSON values; everything
+# else (bool, int4/int8, text) round-trips through JSON unchanged.
+_CAST_TYPES = frozenset({"uuid", "json", "jsonb", "timestamptz", "tsvector", "vector"})
+
+
+def _verify_bundle(bundle: bytes) -> dict[str, bytes]:
+    """Every manifest member present and checksummed; returns member bytes."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(bundle)) as archive:
+            manifest = json.loads(archive.read("manifest.json"))
+            members = {name: archive.read(name) for name in manifest["members"]}
+    except (zipfile.BadZipFile, KeyError, ValueError) as failure:
+        raise BackupCorrupt(f"backup payload is not readable: {failure}") from None
+    if manifest.get("format") != BUNDLE_FORMAT or int(
+        manifest.get("format_version", 0)
+    ) != FORMAT_VERSION:
+        raise BackupCorrupt("backup payload is not a smart-rag bundle")
+    for name, data in members.items():
+        if hashlib.sha256(data).hexdigest() != manifest["members"][name]:
+            raise BackupCorrupt(f"backup member {name} failed its checksum")
+    return members
+
+
+@dataclass(frozen=True)
+class RestoreRecord:
+    filename: str
+    rows: int
+    sources: int
+
+
+async def restore_backup(
+    engine: AsyncEngine, store, writer: EventWriter, *, path: Path,
+    recovery_key: str, actor: str,
+) -> RestoreRecord:
+    """Rebuild a clean installation from one encrypted backup.
+
+    Host-script only: wrong key and structural damage refuse before anything
+    is written; a foreign schema revision or an occupied target (users or
+    workspaces present) refuses loudly. All rows commit in one transaction
+    together with the ``backup.restored`` audit event — a failed restore
+    leaves the target exactly as it was.
+    """
+    header, bundle = load_bundle(path, recovery_key)
+    members = _verify_bundle(bundle)
+
+    for name, data in members.items():
+        if name.startswith("objects/"):
+            address = store.put(data)
+            if address != name.removeprefix("objects/"):
+                raise BackupCorrupt(f"restored object {name} does not match its address")
+
+    async with engine.begin() as connection:
+        try:
+            revision = (
+                await connection.execute(text("SELECT version_num FROM alembic_version"))
+            ).scalar()
+        except ProgrammingError:
+            raise BackupIncompatible(
+                "this installation has no schema; run 'make migrate' before restoring"
+            ) from None
+        if str(revision) != str(header["schema_revision"]):
+            raise BackupIncompatible(
+                f"backup needs schema revision {header['schema_revision']}; this "
+                f"installation is at {revision or 'none'}"
+            )
+        occupied = (
+            await connection.execute(
+                text("SELECT (SELECT count(*) FROM users) + (SELECT count(*) FROM workspaces)")
+            )
+        ).scalar_one()
+        if occupied:
+            raise TargetNotEmpty(
+                "restore requires a clean installation (no users or workspaces); "
+                "reset the database first"
+            )
+        casts = {
+            (row[0], row[1]): row[2]
+            for row in await connection.execute(
+                text(
+                    "SELECT table_name, column_name, udt_name FROM information_schema.columns "
+                    "WHERE table_name = ANY(CAST(:tables AS text[]))"
+                ),
+                {"tables": list(TABLES)},
+            )
+        }
+        restored = 0
+        for table in TABLES:
+            payload = members.get(f"tables/{table}.jsonl")
+            if payload is None:
+                raise BackupCorrupt(f"backup is missing table {table}")
+            rows = [json.loads(line) for line in payload.decode().splitlines() if line]
+            for row in rows:
+                columns = list(row)
+                values = {}
+                for column in columns:
+                    kind = casts.get((table, column))
+                    value = row[column]
+                    if kind in ("json", "jsonb"):
+                        value = json.dumps(value, ensure_ascii=False)
+                    elif kind == "timestamptz" and value is not None:
+                        # asyncpg binds by inferred type: isoformat str must
+                        # become a real datetime, the CAST alone cannot.
+                        value = datetime.fromisoformat(value)
+                    values[column] = value
+                placeholders = ", ".join(
+                    f"CAST(:{column} AS {casts[(table, column)]})"
+                    if casts.get((table, column)) in _CAST_TYPES
+                    else f":{column}"
+                    for column in columns
+                )
+                await connection.execute(
+                    text(
+                        f"INSERT INTO {table} ({', '.join(columns)}) "
+                        f"VALUES ({placeholders})"
+                    ),
+                    values,
+                )
+            restored += len(rows)
+        await writer.record(
+            AuditEvent(
+                type="backup.restored",
+                actor=actor,
+                subject=path.name,
+                metadata={"rows": restored, "sources": len(header["source_ids"])},
+            ),
+            connection,
+        )
+    return RestoreRecord(
+        filename=path.name, rows=restored, sources=len(header["source_ids"])
+    )
 
 
 class DbManagedBackupInventory:

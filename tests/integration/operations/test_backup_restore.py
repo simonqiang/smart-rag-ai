@@ -9,13 +9,16 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from foundation.config import Settings
+from foundation.config import ModelProfile, Settings
 from foundation.events import EventWriter
 from foundation.storage import ObjectStore
 from operations import backup
 
 KEY = "correct horse battery staple"
 OTHER_KEY = "wrong passphrase entirely"
+SMOKE_PROFILE = ModelProfile(
+    name="test", chat_model="fake-chat", embedding_model="fake-embed", embedding_dimensions=3,
+)
 
 
 @asynccontextmanager
@@ -38,7 +41,9 @@ def _run(db: Settings, coro_factory):
 @pytest.fixture()
 def backup_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     monkeypatch.setenv("SMART_RAG_BACKUP_KEY", KEY)
-    return tmp_path / "backups"
+    directory = tmp_path / "backups"
+    directory.mkdir()
+    return directory
 
 
 @pytest.fixture()
@@ -255,6 +260,214 @@ def test_stuck_backup_file_fails_deletion_for_retry(db, workspace, store, backup
         backup_env.chmod(0o755)
     # Row survived with its file; the redelivery reruns the purge.
     assert _rows(db, "SELECT count(*) AS n FROM managed_backups")[0]["n"] == 1
+
+
+ALL_TABLES = (
+    "index_chunks, index_generations, source_versions, site_sync_schedules, sources, "
+    "collection_grants, collections, conversation_messages, conversations, "
+    "retention_policies, generation_provider_settings, invitations, sessions, "
+    "users, workspaces, jobs, outbox, managed_backups"
+)
+
+
+def _truncate_all(db: Settings) -> None:
+    async def run():
+        engine = create_async_engine(db.database_url)
+        async with engine.begin() as connection:
+            await connection.execute(text(f"TRUNCATE {ALL_TABLES} CASCADE"))
+            await connection.execute(text("TRUNCATE audit_events"))
+        await engine.dispose()
+
+    asyncio.run(run())
+
+
+def _craft_backup(db: Settings, store: ObjectStore, backup_env: Path, *,
+                  revision: str | None = None, drop_objects: bool = False,
+                  drop_table: str | None = None, poison_object: bool = False) -> Path:
+    """A valid envelope whose payload was assembled outside create_backup, so
+    revision/object-member damage can be exercised without breaking the GCM
+    authentication the way byte tampering would."""
+    import hashlib
+    import io
+    import json
+    import os
+    import zipfile
+
+    tables, head_revision, source_ids = _run(db, lambda engine: backup._dump(engine))
+    bundle = backup._bundle(tables, revision or head_revision, "2026-10-21T00:00:00+00:00", store)
+    if drop_objects or drop_table or poison_object:
+        rewritten = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(bundle)) as src, \
+                zipfile.ZipFile(rewritten, "w", zipfile.ZIP_DEFLATED) as dst:
+            manifest = json.loads(src.read("manifest.json"))
+            members = dict(manifest["members"])
+            for name in src.namelist():
+                data = src.read(name)
+                if drop_objects and name.startswith("objects/"):
+                    continue  # manifest still lists it: verification must catch the gap
+                if drop_table and name == f"tables/{drop_table}.jsonl":
+                    members.pop(name)
+                    continue
+                if poison_object and name.startswith("objects/"):
+                    # checksummed content under an address it does not hash to
+                    forged = "objects/" + "0" * 64
+                    members.pop(name)
+                    members[forged] = hashlib.sha256(data).hexdigest()
+                    dst.writestr(forged, data)
+                    continue
+                dst.writestr(name, data)
+            manifest["members"] = members
+            dst.writestr(
+                "manifest.json",
+                json.dumps(manifest, ensure_ascii=False, sort_keys=True),
+            )
+        bundle = rewritten.getvalue()
+    header = {
+        "format": backup.BUNDLE_FORMAT,
+        "format_version": backup.FORMAT_VERSION,
+        "created_at": "2026-10-21T00:00:00+00:00",
+        "schema_revision": revision or head_revision,
+        "kdf_salt": os.urandom(16).hex(),
+        "nonce": os.urandom(12).hex(),
+        "bundle_sha256": hashlib.sha256(bundle).hexdigest(),
+        "counts": {table: len(rows) for table, rows in tables.items()},
+        "source_ids": source_ids,
+    }
+    path = backup_env / f"craft-{revision or 'head'}{'-noobj' if drop_objects else ''}.srb"
+    path.write_bytes(backup._encrypt(bundle, header))
+    return path
+
+
+def _restore(db: Settings, store: ObjectStore, path: Path, key: str = KEY):
+    return _run(
+        db,
+        lambda engine: backup.restore_backup(
+            engine, store, EventWriter(), path=path, recovery_key=key, actor="host:simon",
+        ),
+    )
+
+
+def test_restore_recovers_clean_install_and_retrieval(db, workspace, store, backup_env):
+    from ai_providers.fakes import FakeEmbeddingProvider
+    from foundation.unit_of_work import UnitOfWork
+    from identity_access.authorization import AccessContext
+    from retrieval_answering.retrieval import retrieve
+
+    source_id = _seed_source(db, store, workspace)
+    record = _make_backup(db, store, backup_env)
+    _truncate_all(db)
+    assert _rows(db, "SELECT count(*) AS n FROM users")[0]["n"] == 0
+
+    result = _restore(db, store, backup_env / record.filename)
+    assert result.filename == record.filename
+    assert result.rows > 0
+    assert result.sources == 1
+    assert _rows(db, "SELECT count(*) AS n FROM users")[0]["n"] == 1
+    assert _rows(db, "SELECT count(*) AS n FROM sources WHERE id = :id", id=source_id)[0]["n"] == 1
+    chunk = _rows(db, "SELECT text, embedding IS NOT NULL AS has FROM index_chunks")[0]
+    assert chunk["text"] == "Return policy is 30 days."
+    assert chunk["has"]
+    events = _rows(db, "SELECT metadata FROM audit_events WHERE type = 'backup.restored'")
+    assert len(events) == 1
+    assert events[0]["metadata"]["sources"] == 1
+
+    async def smoke():
+        engine = create_async_engine(db.database_url)
+        uow = UnitOfWork(engine)
+        try:
+            return await retrieve(
+                uow, FakeEmbeddingProvider(3),
+                context=AccessContext(
+                    user_id=workspace["owner_id"], workspace_id=workspace["workspace_id"],
+                    role="owner", collection_ids=[workspace["collection_id"]],
+                ),
+                query="return policy", profile=SMOKE_PROFILE,
+            )
+        finally:
+            await engine.dispose()
+
+    hits = asyncio.run(smoke())
+    assert hits.items, "restored chunks must stay retrievable"
+    assert hits.items[0].source_name == "Handbook.pdf"
+
+
+def test_restore_refuses_wrong_key_and_leaves_target_clean(db, workspace, store, backup_env):
+    _seed_source(db, store, workspace)
+    record = _make_backup(db, store, backup_env)
+    _truncate_all(db)
+    with pytest.raises(backup.BackupKeyError):
+        _restore(db, store, backup_env / record.filename, key=OTHER_KEY)
+    assert _rows(db, "SELECT count(*) AS n FROM users")[0]["n"] == 0
+    assert _rows(db, "SELECT count(*) AS n FROM audit_events WHERE type = 'backup.restored'")[0]["n"] == 0
+
+
+def test_restore_refuses_unreadable_file(db, workspace, store, backup_env):
+    _truncate_all(db)
+    junk = backup_env / "junk.srb"
+    junk.write_bytes(b"not a backup at all")
+    with pytest.raises(backup.BackupCorrupt):
+        _restore(db, store, junk)
+
+
+def test_restore_refuses_foreign_schema_revision(db, workspace, store, backup_env):
+    _seed_source(db, store, workspace)
+    path = _craft_backup(db, store, backup_env, revision="0001")
+    _truncate_all(db)
+    with pytest.raises(backup.BackupIncompatible):
+        _restore(db, store, path)
+    assert _rows(db, "SELECT count(*) AS n FROM users")[0]["n"] == 0
+
+
+def test_restore_refuses_missing_object_member(db, workspace, store, backup_env):
+    _seed_source(db, store, workspace)
+    path = _craft_backup(db, store, backup_env, drop_objects=True)
+    _truncate_all(db)
+    with pytest.raises(backup.BackupCorrupt):
+        _restore(db, store, path)
+
+
+def test_restore_refuses_object_address_mismatch(db, workspace, store, backup_env):
+    _seed_source(db, store, workspace)
+    path = _craft_backup(db, store, backup_env, poison_object=True)
+    _truncate_all(db)
+    with pytest.raises(backup.BackupCorrupt, match="does not match its address"):
+        _restore(db, store, path)
+
+
+def test_restore_refuses_missing_table_member(db, workspace, store, backup_env):
+    _seed_source(db, store, workspace)
+    path = _craft_backup(db, store, backup_env, drop_table="users")
+    _truncate_all(db)
+    with pytest.raises(backup.BackupCorrupt, match="missing table users"):
+        _restore(db, store, path)
+    assert _rows(db, "SELECT count(*) AS n FROM workspaces")[0]["n"] == 0
+
+
+def test_restore_refuses_unmigrated_target(db, workspace, store, backup_env):
+    _seed_source(db, store, workspace)
+    record = _make_backup(db, store, backup_env)
+    _truncate_all(db)
+
+    async def rename(table_from: str, table_to: str) -> None:
+        engine = create_async_engine(db.database_url)
+        async with engine.begin() as connection:
+            await connection.execute(text(f"ALTER TABLE {table_from} RENAME TO {table_to}"))
+        await engine.dispose()
+
+    asyncio.run(rename("alembic_version", "alembic_version_hidden"))
+    try:
+        with pytest.raises(backup.BackupIncompatible, match="no schema"):
+            _restore(db, store, backup_env / record.filename)
+    finally:
+        asyncio.run(rename("alembic_version_hidden", "alembic_version"))
+
+
+def test_restore_refuses_occupied_target(db, workspace, store, backup_env):
+    _seed_source(db, store, workspace)
+    record = _make_backup(db, store, backup_env)
+    with pytest.raises(backup.TargetNotEmpty):
+        _restore(db, store, backup_env / record.filename)
+    assert _rows(db, "SELECT count(*) AS n FROM users WHERE email = 'owner@example.com'")[0]["n"] == 1
 
 
 def workspace_context(workspace: dict):
