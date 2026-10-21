@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 from ai_providers.contracts import ProviderError
+from apps.api.routes import analytics as analytics_routes
 from apps.api.routes import ask as ask_routes
 from apps.api.routes import auth as auth_routes
 from apps.api.routes import conversations as conversation_routes
@@ -149,6 +150,7 @@ app.include_router(index_generation_routes.router)
 app.include_router(settings_routes.router)
 app.include_router(web_sync_routes.router)
 app.include_router(operations_routes.router)
+app.include_router(analytics_routes.router)
 app.include_router(provider_settings_routes.router)
 
 

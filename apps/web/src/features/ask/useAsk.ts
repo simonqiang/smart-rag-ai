@@ -8,7 +8,7 @@ import {
   type AskStatus,
 } from "./contracts";
 
-/** Fire-and-forget feedback; the endpoint arrives with Task 25. */
+/** Fire-and-forget feedback (Task 25 endpoint); failures stay silent by design. */
 export async function sendFeedback(requestId: string, helpful: boolean): Promise<void> {
   try {
     await fetch("/api/feedback", {

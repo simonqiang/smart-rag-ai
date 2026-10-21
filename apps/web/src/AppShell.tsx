@@ -20,6 +20,7 @@ const links = [
   { href: "/ask", label: "Ask" },
   { href: "/sources", label: "Sources" },
   { href: "/activity", label: "Activity" },
+  { href: "/analytics", label: "Analytics" },
   { href: "/users", label: "User access" },
   { href: "/settings/retention", label: "Retention" },
   { href: "/settings/ai-provider", label: "AI provider" },

@@ -3,6 +3,7 @@ import SetupPage from "./features/auth/SetupPage";
 import SignInPage from "./features/auth/SignInPage";
 import AskPage from "./features/ask/AskPage";
 import ActivityPage from "./features/activity/ActivityPage";
+import AnalyticsPage from "./features/analytics/AnalyticsPage";
 import UserAccessPage from "./features/settings/UserAccessPage";
 import RetentionSettings from "./features/settings/RetentionSettings";
 import AIProviderSettings from "./features/settings/AIProviderSettings";
@@ -48,6 +49,12 @@ function App() {
     return (
       <AppShell>
         <ActivityPage />
+      </AppShell>
+    );
+  if (path === "/analytics")
+    return (
+      <AppShell>
+        <AnalyticsPage />
       </AppShell>
     );
   if (path === "/sources")
