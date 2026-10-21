@@ -49,13 +49,17 @@ SESSION_COOKIE = "smart_rag_session"
 _engine: AsyncEngine | None = None
 
 
-def uow() -> UnitOfWork:
+def engine() -> AsyncEngine:
     # NullPool: each request runs on its own event loop (TestClient, workers);
     # pooled connections would stay bound to the loop that created them.
     global _engine
     if _engine is None:
         _engine = create_async_engine(Settings.load().database_url, poolclass=NullPool)
-    return UnitOfWork(_engine)
+    return _engine
+
+
+def uow() -> UnitOfWork:
+    return UnitOfWork(engine())
 
 
 async def readiness() -> SetupReadiness:

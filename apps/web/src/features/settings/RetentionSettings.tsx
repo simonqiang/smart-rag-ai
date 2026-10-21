@@ -13,6 +13,7 @@ export function toDays(raw: string): number | null {
 export default function RetentionSettings() {
   const [supersededDays, setSupersededDays] = useState("30");
   const [conversationDays, setConversationDays] = useState("90");
+  const [backupDays, setBackupDays] = useState("30");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -24,9 +25,12 @@ export default function RetentionSettings() {
       setError(detailText(result));
       return;
     }
-    const payload = result.payload as unknown as { superseded_days: number; conversation_days: number };
+    const payload = result.payload as unknown as {
+      superseded_days: number; conversation_days: number; backup_days: number;
+    };
     setSupersededDays(String(payload.superseded_days));
     setConversationDays(String(payload.conversation_days));
+    setBackupDays(String(payload.backup_days));
   }, []);
 
   useEffect(() => {
@@ -37,7 +41,8 @@ export default function RetentionSettings() {
     event.preventDefault();
     const superseded = toDays(supersededDays);
     const conversation = toDays(conversationDays);
-    if (superseded === null || conversation === null) {
+    const backup = toDays(backupDays);
+    if (superseded === null || conversation === null || backup === null) {
       setError("Retention windows must be whole days of at least 1.");
       return;
     }
@@ -47,6 +52,7 @@ export default function RetentionSettings() {
     const result = await putJson("/api/settings/retention", {
       superseded_days: superseded,
       conversation_days: conversation,
+      backup_days: backup,
     });
     setBusy(false);
     if (!result.ok) {
@@ -56,14 +62,16 @@ export default function RetentionSettings() {
     setNotice("Retention windows saved. The nightly purge applies them.");
   }
 
-  const valid = toDays(supersededDays) !== null && toDays(conversationDays) !== null;
+  const valid =
+    toDays(supersededDays) !== null && toDays(conversationDays) !== null && toDays(backupDays) !== null;
 
   return (
     <main style={{ maxWidth: "48rem", margin: "0 auto", padding: "1rem" }}>
       <h1>Retention</h1>
       <p>
-        Expired superseded source versions, retired pages, unreferenced files, and
-        stale conversations are purged once a day. Active knowledge is never purged.
+        Expired superseded source versions, retired pages, unreferenced files, stale
+        conversations, and expired backups are purged once a day. Active knowledge is
+        never purged.
       </p>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
@@ -91,6 +99,18 @@ export default function RetentionSettings() {
             required
             value={conversationDays}
             onChange={(event) => setConversationDays(event.target.value)}
+          />
+        </label>
+        <label>
+          Keep managed backups for (days)
+          <input
+            style={fieldStyle}
+            type="number"
+            min={1}
+            step={1}
+            required
+            value={backupDays}
+            onChange={(event) => setBackupDays(event.target.value)}
           />
         </label>
         <button type="submit" disabled={busy || !valid}>

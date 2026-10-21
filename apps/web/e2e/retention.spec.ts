@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const retentionRoute = "**/api/settings/retention";
 
-const defaults = { superseded_days: 30, conversation_days: 90 };
+const defaults = { superseded_days: 30, conversation_days: 90, backup_days: 30 };
 
 async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(
@@ -32,11 +32,14 @@ test("owner sees the defaults and saves new windows", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Retention" })).toBeVisible();
   const superseded = page.getByLabel(/superseded versions/i);
   const conversations = page.getByLabel(/idle conversations/i);
+  const backups = page.getByLabel(/managed backups/i);
   await expect(superseded).toHaveValue("30");
   await expect(conversations).toHaveValue("90");
+  await expect(backups).toHaveValue("30");
 
   await superseded.fill("14");
   await conversations.fill("60");
+  await backups.fill("10");
   await page.getByRole("button", { name: "Save retention windows" }).click();
   await expect(page.getByRole("status")).toContainText("Retention windows saved");
   await expectNoHorizontalOverflow(page);

@@ -83,17 +83,21 @@ def test_owner_reads_defaults_and_updates(client, workspace) -> None:
 
     defaults = client.get("/api/settings/retention")
     assert defaults.status_code == 200, defaults.text
-    assert defaults.json() == {"superseded_days": 30, "conversation_days": 90}
+    assert defaults.json() == {
+        "superseded_days": 30, "conversation_days": 90, "backup_days": 30,
+    }
 
     updated = client.put(
         "/api/settings/retention",
-        json={"superseded_days": 14, "conversation_days": 60},
+        json={"superseded_days": 14, "conversation_days": 60, "backup_days": 10},
     )
     assert updated.status_code == 200, updated.text
-    assert updated.json() == {"superseded_days": 14, "conversation_days": 60}
+    assert updated.json() == {
+        "superseded_days": 14, "conversation_days": 60, "backup_days": 10,
+    }
 
     assert client.get("/api/settings/retention").json() == {
-        "superseded_days": 14, "conversation_days": 60,
+        "superseded_days": 14, "conversation_days": 60, "backup_days": 10,
     }
 
 
@@ -106,7 +110,7 @@ def test_only_owners_may_read_or_update(client, workspace) -> None:
         assert client.get("/api/settings/retention").status_code == 403
         assert client.put(
             "/api/settings/retention",
-            json={"superseded_days": 7, "conversation_days": 30},
+            json={"superseded_days": 7, "conversation_days": 30, "backup_days": 15},
         ).status_code == 403
 
 
@@ -114,6 +118,6 @@ def test_non_positive_windows_are_refused(client, workspace) -> None:
     _sign_in(client, OWNER)
     response = client.put(
         "/api/settings/retention",
-        json={"superseded_days": 0, "conversation_days": 90},
+        json={"superseded_days": 0, "conversation_days": 90, "backup_days": 30},
     )
     assert response.status_code == 422

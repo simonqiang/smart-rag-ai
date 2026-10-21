@@ -49,8 +49,8 @@ BODY = "The retention policy keeps superseded knowledge for a bounded period onl
 
 RETENTION_TABLES = (
     "index_chunks, index_generations, source_versions, sources, collections, "
-    "conversations, retention_policies, invitations, sessions, users, workspaces, "
-    "jobs, outbox"
+    "conversations, retention_policies, managed_backups, invitations, sessions, "
+    "users, workspaces, jobs, outbox"
 )
 
 
@@ -243,14 +243,42 @@ def _age_artifacts(store_root: Path, days: int = 40) -> None:
             os.utime(path, (stale, stale))
 
 
-def _purge(db: Settings, store_root: Path, store: ObjectStore | None = None) -> dict:
+def _purge(db: Settings, store_root: Path, store: ObjectStore | None = None,
+           backup_dir: Path | None = None) -> dict:
     return asdict(_run(
         db,
         lambda uow, engine, _store: run_retention_purge(
             engine, store or ObjectStore(store_root), EventWriter(),
+            backup_dir=backup_dir or store_root / "backups",
         ),
         store_root,
     ))
+
+
+def _seed_backup(backup_dir: Path, name: str, *, age_days: int) -> str:
+    """One managed-backup row plus its file; the purge only touches rows and
+    files, so SQL seeding exercises the expiry without a full backup write."""
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    (backup_dir / name).write_bytes(b"SRB1-not-a-real-backup")
+    backup_id = str(uuid.uuid4())
+
+    async def insert() -> None:
+        engine = create_async_engine(Settings.load().database_url)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "INSERT INTO managed_backups (id, filename, sha256, size_bytes, "
+                        "source_ids, created_at) VALUES (CAST(:id AS uuid), :name, 'sha', 24, "
+                        "CAST('[]' AS jsonb), now() - make_interval(days => :days))"
+                    ),
+                    {"id": backup_id, "name": name, "days": age_days},
+                )
+        finally:
+            await engine.dispose()
+
+    asyncio.run(insert())
+    return backup_id
 
 
 def test_policy_defaults_when_no_row_exists(db, workspace) -> None:
@@ -258,6 +286,7 @@ def test_policy_defaults_when_no_row_exists(db, workspace) -> None:
         policy = await get_retention_policy(uow, workspace_id=workspace["workspace_id"])
         assert policy.superseded_days == 30
         assert policy.conversation_days == 90
+        assert policy.backup_days == 30
 
     _run(db, run)
 
@@ -266,15 +295,16 @@ def test_owner_updates_policy_and_audit_is_recorded(db, workspace) -> None:
     async def run(uow, _engine, _store) -> None:
         policy = await update_retention_policy(
             uow, EventWriter(), context=workspace["owner_context"],
-            superseded_days=7, conversation_days=14,
+            superseded_days=7, conversation_days=14, backup_days=21,
         )
         assert (policy.superseded_days, policy.conversation_days) == (7, 14)
+        assert policy.backup_days == 21
         # Upsert: a second update replaces the row instead of failing.
         again = await update_retention_policy(
             uow, EventWriter(), context=workspace["owner_context"],
-            superseded_days=8, conversation_days=15,
+            superseded_days=8, conversation_days=15, backup_days=22,
         )
-        assert (again.superseded_days, again.conversation_days) == (8, 15)
+        assert (again.superseded_days, again.conversation_days, again.backup_days) == (8, 15, 22)
 
     _run(db, run)
     updates = _counts(
@@ -296,7 +326,7 @@ def test_non_owner_cannot_update_policy(db, workspace) -> None:
             try:
                 await update_retention_policy(
                     uow, EventWriter(), context=context,
-                    superseded_days=7, conversation_days=14,
+                    superseded_days=7, conversation_days=14, backup_days=30,
                 )
             except AccessDenied:
                 continue
@@ -312,11 +342,15 @@ def test_policy_rejects_non_positive_days(db, workspace) -> None:
             try:
                 await update_retention_policy(
                     uow, EventWriter(), context=workspace["owner_context"],
-                    superseded_days=days, conversation_days=90,
+                    superseded_days=days, conversation_days=90, backup_days=30,
+                )
+                await update_retention_policy(
+                    uow, EventWriter(), context=workspace["owner_context"],
+                    superseded_days=30, conversation_days=90, backup_days=days,
                 )
             except ValueError:
                 continue
-            raise AssertionError(f"accepted superseded_days={days}")
+            raise AssertionError(f"accepted days={days}")
 
     _run(db, run)
 
@@ -547,7 +581,7 @@ def test_shortened_retention_purges_sooner(db, workspace, store_root) -> None:
         try:
             await update_retention_policy(
                 UnitOfWork(engine), EventWriter(), context=workspace["owner_context"],
-                superseded_days=1, conversation_days=90,
+                superseded_days=1, conversation_days=90, backup_days=30,
             )
         finally:
             await engine.dispose()
@@ -621,13 +655,91 @@ def test_counts_only_audit_event_per_run(db, workspace, store_root) -> None:
     assert str(event["actor"]) == "system"
     assert str(event["subject"]) == workspace["workspace_id"]
     assert set(event["metadata"].keys()) == {
-        "versions", "artifacts", "conversations", "workspace_id",
+        "versions", "artifacts", "conversations", "backups", "workspace_id",
     }
 
 
 def test_run_on_empty_database_is_a_noop(db, tmp_path: Path) -> None:
     evidence = _purge(db, tmp_path / "store")
-    assert evidence == {"versions": 0, "artifacts": 0, "conversations": 0}
+    assert evidence == {
+        "versions": 0, "artifacts": 0, "conversations": 0, "backups": 0,
+    }
+
+
+def test_expired_backups_are_purged_and_fresh_kept(db, workspace, store_root) -> None:
+    backups = store_root / "backups"
+    old_id = _seed_backup(backups, "old.srb", age_days=40)
+    fresh_id = _seed_backup(backups, "fresh.srb", age_days=2)
+
+    evidence = _purge(db, store_root, backup_dir=backups)
+
+    assert evidence["backups"] == 1
+    assert _counts(db, "SELECT count(*) FROM managed_backups WHERE id = :id", {"id": old_id}) == 0
+    assert not (backups / "old.srb").exists()
+    assert _counts(db, "SELECT count(*) FROM managed_backups WHERE id = :id", {"id": fresh_id}) == 1
+    assert (backups / "fresh.srb").exists()
+    purged = _rows_event(db)
+    assert purged["backups"] == 1
+
+
+def test_shortened_backup_retention_purges_sooner(db, workspace, store_root) -> None:
+    backups = store_root / "backups"
+    backup_id = _seed_backup(backups, "mid.srb", age_days=5)
+
+    _purge(db, store_root, backup_dir=backups)
+    assert _counts(db, "SELECT count(*) FROM managed_backups WHERE id = :id", {"id": backup_id}) == 1
+
+    async def shorten() -> None:
+        engine = create_async_engine(Settings.load().database_url)
+        try:
+            await update_retention_policy(
+                UnitOfWork(engine), EventWriter(), context=workspace["owner_context"],
+                superseded_days=30, conversation_days=90, backup_days=1,
+            )
+        finally:
+            await engine.dispose()
+
+    asyncio.run(shorten())
+    evidence = _purge(db, store_root, backup_dir=backups)
+    assert evidence["backups"] == 1
+    assert _counts(db, "SELECT count(*) FROM managed_backups WHERE id = :id", {"id": backup_id}) == 0
+
+
+def test_stuck_backup_file_fails_run_and_retry_finishes(db, workspace, store_root) -> None:
+    backups = store_root / "backups"
+    stuck_id = _seed_backup(backups, "stuck.srb", age_days=40)
+    _seed_backup(backups, "young.srb", age_days=1)
+
+    backups.chmod(0o555)
+    try:
+        with pytest.raises(RetentionIncomplete):
+            _purge(db, store_root, backup_dir=backups)
+    finally:
+        backups.chmod(0o755)
+    # Row and file survive: the retry reruns the scan.
+    assert _counts(db, "SELECT count(*) FROM managed_backups WHERE id = :id", {"id": stuck_id}) == 1
+
+    evidence = _purge(db, store_root, backup_dir=backups)
+    assert evidence["backups"] == 1
+    assert _counts(db, "SELECT count(*) FROM managed_backups WHERE id = :id", {"id": stuck_id}) == 0
+
+
+def _rows_event(db: Settings) -> dict:
+    async def read() -> dict:
+        engine = create_async_engine(Settings.load().database_url)
+        try:
+            async with engine.begin() as connection:
+                row = (
+                    await connection.execute(
+                        text("SELECT metadata FROM audit_events WHERE type = 'retention.purged'")
+                    )
+                ).first()
+        finally:
+            await engine.dispose()
+        assert row is not None
+        return dict(row[0])
+
+    return asyncio.run(read())
 
 
 def test_worker_actor_claims_and_completes(db, workspace, store_root, monkeypatch) -> None:
@@ -687,7 +799,7 @@ def test_worker_actor_retries_when_artifact_purge_fails(
 
     job_id = asyncio.run(seed())
 
-    async def stuck(engine, store, writer):
+    async def stuck(engine, store, writer, *, backup_dir):
         raise RetentionIncomplete("simulated stuck artifact")
 
     monkeypatch.setattr(task_module, "run_retention_purge", stuck)

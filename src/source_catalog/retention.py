@@ -10,13 +10,15 @@ untouched. Artifacts are content-addressed and shared (duplicate uploads,
 rollback reuse), so an object is deleted only when no version row references
 it any more and the file predates the cutoff — the age guard also closes the
 upload-in-flight race, where an object is stored milliseconds before its row
-commits. Every run records a counts-only ``retention.purged`` audit event.
+commits. Managed backups (Task 24) expire under ``backup_days`` in the same
+pass. Every run records a counts-only ``retention.purged`` audit event.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -29,6 +31,7 @@ from retrieval_answering.conversation import delete_expired_conversations
 
 DEFAULT_SUPERSEDED_DAYS = 30
 DEFAULT_CONVERSATION_DAYS = 90
+DEFAULT_BACKUP_DAYS = 30
 
 # 'retired' is the Task 20 website-page state; retired pages purge through
 # the same version lifecycle as superseded uploads.
@@ -45,6 +48,7 @@ class RetentionPolicy:
     workspace_id: str
     superseded_days: int
     conversation_days: int
+    backup_days: int = DEFAULT_BACKUP_DAYS
 
 
 @dataclass(frozen=True)
@@ -52,6 +56,7 @@ class PurgeEvidence:
     versions: int
     artifacts: int
     conversations: int
+    backups: int = 0
 
 
 class RetentionIncomplete(Exception):
@@ -65,8 +70,8 @@ async def get_retention_policy(uow: UnitOfWork, *, workspace_id: str) -> Retenti
             (
                 await transaction.execute(
                     text(
-                        "SELECT superseded_days, conversation_days FROM retention_policies "
-                        "WHERE workspace_id = :workspace_id"
+                        "SELECT superseded_days, conversation_days, backup_days "
+                        "FROM retention_policies WHERE workspace_id = :workspace_id"
                     ),
                     {"workspace_id": workspace_id},
                 )
@@ -79,11 +84,13 @@ async def get_retention_policy(uow: UnitOfWork, *, workspace_id: str) -> Retenti
             workspace_id=workspace_id,
             superseded_days=DEFAULT_SUPERSEDED_DAYS,
             conversation_days=DEFAULT_CONVERSATION_DAYS,
+            backup_days=DEFAULT_BACKUP_DAYS,
         )
     return RetentionPolicy(
         workspace_id=workspace_id,
         superseded_days=int(row["superseded_days"]),
         conversation_days=int(row["conversation_days"]),
+        backup_days=int(row["backup_days"]),
     )
 
 
@@ -94,25 +101,27 @@ async def update_retention_policy(
     context: AccessContext,
     superseded_days: int,
     conversation_days: int,
+    backup_days: int,
 ) -> RetentionPolicy:
     """Owner-only upsert of the purge windows; audited transactionally."""
     authorize("retention.update", ProtectedResource(context.workspace_id), context)
-    if superseded_days < 1 or conversation_days < 1:
+    if min(superseded_days, conversation_days, backup_days) < 1:
         raise ValueError("retention windows must be at least one day")
     async with uow.transaction() as transaction:
         await transaction.execute(
             text(
                 "INSERT INTO retention_policies "
-                "(workspace_id, superseded_days, conversation_days, updated_at) "
-                "VALUES (:workspace_id, :superseded, :conversation, now()) "
+                "(workspace_id, superseded_days, conversation_days, backup_days, updated_at) "
+                "VALUES (:workspace_id, :superseded, :conversation, :backup, now()) "
                 "ON CONFLICT (workspace_id) DO UPDATE SET "
                 "superseded_days = :superseded, conversation_days = :conversation, "
-                "updated_at = now()"
+                "backup_days = :backup, updated_at = now()"
             ),
             {
                 "workspace_id": context.workspace_id,
                 "superseded": superseded_days,
                 "conversation": conversation_days,
+                "backup": backup_days,
             },
         )
         await writer.record(
@@ -123,6 +132,7 @@ async def update_retention_policy(
                 metadata={
                     "superseded_days": superseded_days,
                     "conversation_days": conversation_days,
+                    "backup_days": backup_days,
                 },
             ),
             transaction,
@@ -131,6 +141,7 @@ async def update_retention_policy(
         workspace_id=context.workspace_id,
         superseded_days=superseded_days,
         conversation_days=conversation_days,
+        backup_days=backup_days,
     )
 
 
@@ -174,8 +185,40 @@ async def purge_version_if_expired(
         return True
 
 
+async def _purge_expired_backups(
+    engine: AsyncEngine, backup_dir: Path, cutoff: datetime,
+) -> int:
+    """Claim each expired managed backup under a row lock and recheck its age
+    in the same statement; a stuck file aborts the run so the job retries
+    (the next pass re-unlinks idempotently via ``missing_ok``)."""
+    purged = 0
+    async with engine.begin() as connection:
+        rows = (
+            await connection.execute(
+                text(
+                    "SELECT id, filename FROM managed_backups "
+                    "WHERE created_at < :cutoff ORDER BY created_at FOR UPDATE"
+                ),
+                {"cutoff": cutoff},
+            )
+        ).mappings().all()
+        for row in rows:
+            try:
+                (backup_dir / str(row["filename"])).unlink(missing_ok=True)
+            except OSError as failure:
+                raise RetentionIncomplete(
+                    f"backup purge failed for {str(row['filename'])[:24]}: {failure}"
+                ) from None
+            await connection.execute(
+                text("DELETE FROM managed_backups WHERE id = :id"), {"id": row["id"]}
+            )
+            purged += 1
+    return purged
+
+
 async def run_retention_purge(
-    engine: AsyncEngine, store: ObjectStore, writer: EventWriter,
+    engine: AsyncEngine, store: ObjectStore, writer: EventWriter, *,
+    backup_dir: Path,
 ) -> PurgeEvidence:
     """Idempotent scheduled pass over every workspace; safe to redeliver."""
     now = datetime.now(UTC)
@@ -185,7 +228,7 @@ async def run_retention_purge(
             for row in (await connection.execute(text("SELECT id FROM workspaces"))).all()
         ]
     if not workspaces:
-        return PurgeEvidence(versions=0, artifacts=0, conversations=0)
+        return PurgeEvidence(versions=0, artifacts=0, conversations=0, backups=0)
 
     uow = UnitOfWork(engine)
     policies = {
@@ -224,14 +267,22 @@ async def run_retention_purge(
         now - timedelta(days=policy.superseded_days) for policy in policies.values()
     )
     artifacts = await _purge_unreferenced_artifacts(engine, store, artifact_cutoff)
+    # Managed backups (Task 24) carry no workspace column; the deployment has
+    # exactly one workspace, so its window decides the cutoff like artifacts.
+    backup_cutoff = min(
+        now - timedelta(days=policy.backup_days) for policy in policies.values()
+    )
+    backups = await _purge_expired_backups(engine, backup_dir, backup_cutoff)
     # Deployments have exactly one workspace (first-owner exclusivity); the
     # run's counts-only receipt names it so Task 22 diagnostics can filter.
     subject = workspaces[0]
     await _record_run(
         engine, writer, subject=subject, versions=versions,
-        artifacts=artifacts, conversations=conversations,
+        artifacts=artifacts, conversations=conversations, backups=backups,
     )
-    return PurgeEvidence(versions=versions, artifacts=artifacts, conversations=conversations)
+    return PurgeEvidence(
+        versions=versions, artifacts=artifacts, conversations=conversations, backups=backups,
+    )
 
 
 async def _purge_unreferenced_artifacts(
@@ -268,7 +319,7 @@ async def _purge_unreferenced_artifacts(
 
 async def _record_run(
     engine: AsyncEngine, writer: EventWriter, *, subject: str,
-    versions: int, artifacts: int, conversations: int,
+    versions: int, artifacts: int, conversations: int, backups: int,
 ) -> None:
     async with engine.begin() as connection:
         await writer.record(
@@ -280,6 +331,7 @@ async def _record_run(
                     "versions": versions,
                     "artifacts": artifacts,
                     "conversations": conversations,
+                    "backups": backups,
                     "workspace_id": subject,
                 },
             ),

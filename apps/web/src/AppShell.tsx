@@ -23,6 +23,7 @@ const links = [
   { href: "/users", label: "User access" },
   { href: "/settings/retention", label: "Retention" },
   { href: "/settings/ai-provider", label: "AI provider" },
+  { href: "/settings/backup", label: "Backup" },
 ];
 
 /** Responsive application shell: wrap-around navigation for signed-in pages. */

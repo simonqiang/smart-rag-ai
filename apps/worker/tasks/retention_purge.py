@@ -31,7 +31,8 @@ def retention_purge(**payload: str) -> str:
     engine = _engine(settings.database_url)
     try:
         return asyncio.run(purge_payload(
-            engine, ObjectStore(Path(settings.data_dir)), payload,
+            engine, ObjectStore(Path(settings.data_dir)),
+            Path(settings.backup_dir), payload,
         ))
     finally:
         asyncio.run(engine.dispose())
@@ -46,14 +47,18 @@ def _engine(database_url: str) -> AsyncEngine:
     return create_async_engine(database_url, poolclass=NullPool)
 
 
-async def purge_payload(engine: AsyncEngine, store: ObjectStore, payload: dict) -> str:
+async def purge_payload(
+    engine: AsyncEngine, store: ObjectStore, backup_dir: Path, payload: dict,
+) -> str:
     claims = JobClaims(engine)
     job_id = uuid.UUID(str(payload["job_id"]))
     lease = await claims.claim(job_id)
     if not isinstance(lease, Lease):  # another consumer holds it, or it is done
         return "skipped"
     try:
-        evidence = await run_retention_purge(engine, store, EventWriter())
+        evidence = await run_retention_purge(
+            engine, store, EventWriter(), backup_dir=backup_dir,
+        )
     except RetentionIncomplete:
         await claims.retry(lease, detail="retention_incomplete")
         raise
