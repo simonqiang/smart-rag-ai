@@ -10,11 +10,41 @@ const smoke = [
 ] as const;
 
 const full = [
-  { name: "full-mobile-320-portrait", ...devices["Desktop Chrome"], viewport: { width: 320, height: 844 } },
-  { name: "full-mobile-landscape", ...devices["Desktop Chrome"], viewport: { width: 844, height: 320 } },
-  { name: "full-tablet-768-portrait", ...devices["Desktop Chrome"], viewport: { width: 768, height: 1024 } },
-  { name: "full-tablet-768-landscape", ...devices["Desktop Chrome"], viewport: { width: 1024, height: 768 } },
-  { name: "full-tablet-1024-portrait", ...devices["Desktop Chrome"], viewport: { width: 1024, height: 1366 } },
+  {
+    name: "full-mobile-320-portrait",
+    ...devices["Desktop Chrome"],
+    viewport: { width: 320, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  },
+  {
+    name: "full-mobile-landscape",
+    ...devices["Desktop Chrome"],
+    viewport: { width: 844, height: 320 },
+    isMobile: true,
+    hasTouch: true,
+  },
+  {
+    name: "full-tablet-768-portrait",
+    ...devices["Desktop Chrome"],
+    viewport: { width: 768, height: 1024 },
+    isMobile: true,
+    hasTouch: true,
+  },
+  {
+    name: "full-tablet-768-landscape",
+    ...devices["Desktop Chrome"],
+    viewport: { width: 1024, height: 768 },
+    isMobile: true,
+    hasTouch: true,
+  },
+  {
+    name: "full-tablet-1024-portrait",
+    ...devices["Desktop Chrome"],
+    viewport: { width: 1024, height: 1366 },
+    isMobile: true,
+    hasTouch: true,
+  },
   { name: "full-desktop-1440", ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
 ] as const;
 

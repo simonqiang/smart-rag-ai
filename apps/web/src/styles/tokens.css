@@ -1,0 +1,193 @@
+:root {
+  --bp-mobile: 320px;
+  --bp-tablet-portrait: 768px;
+  --bp-tablet-landscape: 1024px;
+  --bp-desktop: 1440px;
+  --touch-target-min: 44px;
+  --color-bg: #ffffff;
+  --color-surface: #f8fafc;
+  --color-text: #111827;
+  --color-primary: #0b57d0;
+  --color-border: #cbd5e1;
+  --color-focus: #0b57d0;
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 0.75rem;
+  --space-lg: 1rem;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+main,
+[role="main"],
+section,
+aside,
+li,
+p,
+span,
+code,
+strong,
+blockquote,
+label {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+main,
+.app-shell-content {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: var(--space-lg);
+  width: 100%;
+}
+
+button,
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  min-height: var(--touch-target-min);
+  min-width: var(--touch-target-min);
+  max-width: 100%;
+  font: inherit;
+  color: var(--color-text);
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.85rem;
+  background-color: var(--color-surface);
+  border: 1px solid #475569;
+  border-radius: 4px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+a[href] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch-target-min);
+  min-width: var(--touch-target-min);
+  padding: 0.5rem 0.75rem;
+  color: var(--color-primary);
+  vertical-align: middle;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  width: var(--touch-target-min);
+  height: var(--touch-target-min);
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  vertical-align: middle;
+  margin: 0 0.5rem 0 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+button:focus,
+button:focus-visible,
+a[href]:focus,
+a[href]:focus-visible,
+input:focus,
+input:focus-visible,
+select:focus,
+select:focus-visible,
+textarea:focus,
+textarea:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.app-shell-header {
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 var(--space-md);
+  background-color: var(--color-bg);
+}
+
+.app-shell-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  max-width: 64rem;
+  margin: 0 auto;
+}
+
+.app-shell-brand {
+  margin-right: auto;
+  padding: 0.65rem 0;
+}
+
+.app-shell-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  width: 100%;
+}
+
+.app-shell-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch-target-min);
+  min-width: var(--touch-target-min);
+  padding: 0.5rem 0.75rem;
+  text-decoration: none;
+  color: var(--color-primary);
+  border-radius: 4px;
+}
+
+.app-shell-link[aria-current="page"] {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+@media (min-width: 768px) {
+  .app-shell-header {
+    padding: 0 var(--space-lg);
+  }
+
+  .app-shell-nav {
+    width: auto;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-shell-bar {
+    gap: var(--space-sm);
+  }
+}
+
+@media (min-width: 1440px) {
+  main,
+  .app-shell-content,
+  .app-shell-bar {
+    max-width: 72rem;
+  }
+}

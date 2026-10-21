@@ -1,20 +1,7 @@
 import type { ReactNode } from "react";
 
 import { navigate, usePath } from "./router";
-
-const headerStyle = { borderBottom: "1px solid #ccc", padding: "0 1rem" } as const;
-const barStyle = {
-  display: "flex",
-  flexWrap: "wrap",
-  alignItems: "center",
-  gap: "0.25rem",
-} as const;
-const linkStyle = {
-  display: "inline-block",
-  padding: "0.65rem 0.9rem",
-  textDecoration: "none",
-  color: "#0b57d0",
-} as const;
+import "./styles/tokens.css";
 
 const links = [
   { href: "/ask", label: "Ask" },
@@ -30,21 +17,19 @@ const links = [
 /** Responsive application shell: wrap-around navigation for signed-in pages. */
 export default function AppShell({ children }: { children: ReactNode }) {
   const path = usePath();
+  const needsMainLandmark = path === "/activity" || path === "/analytics";
   return (
     <>
-      <header style={headerStyle}>
-        <div style={barStyle}>
-          <strong style={{ marginRight: "auto", padding: "0.65rem 0" }}>Smart RAG AI</strong>
-          <nav aria-label="primary" style={{ display: "flex", flexWrap: "wrap" }}>
+      <header className="app-shell-header">
+        <div className="app-shell-bar">
+          <strong className="app-shell-brand">Smart RAG AI</strong>
+          <nav aria-label="primary" className="app-shell-nav">
             {links.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
+                className="app-shell-link"
                 aria-current={path === link.href ? "page" : undefined}
-                style={{
-                  ...linkStyle,
-                  fontWeight: path === link.href ? 700 : 400,
-                }}
                 onClick={(event) => {
                   event.preventDefault();
                   navigate(link.href);
@@ -56,7 +41,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </nav>
         </div>
       </header>
-      {children}
+      {needsMainLandmark ? <main className="app-shell-content">{children}</main> : children}
     </>
   );
 }

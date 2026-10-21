@@ -222,14 +222,16 @@ These are master work packages. Before implementation, any package larger than o
 
 ### Checkpoint D
 
-- [ ] All supported sources, GLM switching, operations, and restore workflows pass.
+- [x] All supported sources, GLM switching, operations, and restore workflows pass.
+  - Verified 2026-10-22: Tasks 19–25 cover all supported formats (HTML/DOCX/PPTX/XLSX/CSV/image OCR across English, Chinese, and Malay), website snapshot sync, operator activity/retry/diagnostics, consented GLM generation switching without re-indexing, encrypted backup and clean-install restore, and privacy-safe answer feedback analytics.
 
 ## Phase 7 — Responsive, security, and performance hardening
 
-- [ ] **Task 26: Complete responsive and accessibility hardening**
+- [x] **Task 26: Complete responsive and accessibility hardening**
   - Acceptance: every role/workflow passes at 320/768/1024/1440 widths, mobile/tablet orientations, keyboard, touch, and WCAG AA checks.
   - Verify: `make test-e2e-full` (complete matrix) and automated accessibility scan pass; nightly workflow runs the same matrix.
   - Dependencies: all user-facing tasks.
+  - Status 2026-10-22 (complete): `apps/web/src/styles/tokens.css` defines shared breakpoint tokens (320/768/1024/1440), `box-sizing: border-box`, overflow wrapping for long filenames/URLs/tokens, 44×44 CSS pixel minimum touch targets across buttons/links/inputs/selects/checkboxes, WCAG 2.1 AA high-contrast surface/text/link tokens, and 2px `:focus-visible` focus rings; `AppShell.tsx` imports `tokens.css` (bundling it across all public and signed-in routes) and provides the `<main>` landmark for `/activity` and `/analytics` without nested `<main>` tags; `apps/web/playwright.config.ts` enables `isMobile`/`hasTouch` on the full mobile/tablet portrait and landscape projects; `apps/web/e2e/responsive-accessibility.spec.ts` runs automated WCAG 2.1 AA contrast, accessible-name, landmark, heading-hierarchy, duplicate-ID, 44×44 touch-target, hover-only rule, horizontal-overflow/clipping, keyboard/focus, and orientation-change preservation audits across every route and role. `make test-e2e-full` green (513 passed across 9 device projects); `.github/workflows/nightly.yml` runs `make check-release` which executes `test-e2e-full`.
 - [ ] **Task 27: Complete security, performance, and RAG quality hardening**
   - Acceptance: abuse tests, performance targets, and blocking evaluation metrics pass on the recommended profile.
   - Verify: `make test-security && make test-performance && make test-evaluation && make coverage` passes with fixed/reported random seeds and per-language evaluation thresholds.
