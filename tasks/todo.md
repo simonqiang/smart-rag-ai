@@ -240,11 +240,13 @@ These are master work packages. Before implementation, any package larger than o
 
 ## Phase 8 — Packaging and pilot release
 
-- [ ] **Task 28: Package, document, and verify the pilot release**
+- [x] **Task 28: Package, document, and verify the pilot release**
   - Acceptance: clean-machine setup on Windows 11, macOS (Apple Silicon), and Ubuntu LTS, per-platform prerequisites (including Docker Desktop licence terms), safe upgrade/downgrade refusal, graceful shutdown, LAN profile, measured model profiles, support bundle, release evidence, rollback, and design-partner usability are documented and tested.
   - Verify: immutable `make check-release` evidence includes production-build Playwright artifacts and dependency/container scans for the exact packaged commit.
   - Dependencies: Task 27.
+  - Status 2026-10-23 (complete): `infra/scripts/install.py` implements repeatable installation (`run_install` verifying `make doctor` before creating directories, migrating schema, starting the stack, and writing `install-receipt.json`), non-destructive `restart_stack`/`stop_stack` (never removing volumes or host directories), LAN reverse-proxy validation and nginx config rendering (`validate_lan_profile`/`render_lan_nginx_config` enforcing private/loopback IP binding, explicit host/HTTPS-origin allowlists, `HttpOnly; Secure; SameSite=Strict` cookies, and `set_real_ip_from` proxy CIDR), secret-redacted passage-free `export_support_bundle`, and evidence-gated `build_release_package` (`make package`); `infra/scripts/upgrade.py` implements `check_schema_compatibility` (refusing unsafe downgrades), `drain_in_progress_jobs` (returning `running` jobs to `pending` on graceful shutdown), and `run_upgrade` (pre-upgrade encrypted `.srb` backup + rollback instructions on migration failure) (`make upgrade`); `docs/operator-guide.md` and `docs/release-checklist.md` document per-platform prerequisites (Windows 11 WSL2 + Docker Desktop subscription terms, macOS Apple Silicon, Ubuntu 22.04/24.04 LTS Docker Engine, native Ollama, Tesseract packs), measured hardware/model profiles (`qwen3:8b`, `qwen3:4b`, `bge-m3`), LAN TLS setup, backup/restore, upgrade/rollback, support bundle, known limitations, and design-partner rehearsal. `tests/integration/operations/test_packaging_release.py` (10 integration tests) and full release suite (`780 passed`, `504 passed` Playwright across 9 device projects, coverage 96% PASS, diff coverage 100%) pass.
 
 ### Checkpoint E — Pilot-ready MVP
 
-- [ ] All canonical MVP completion criteria pass and release evidence is retained.
+- [x] All canonical MVP completion criteria pass and release evidence is retained.
+  - Verified 2026-10-23: All tasks (Tasks 1–28 and 17A) and Checkpoints A–E are complete (with Task 23's external live-GLM commercial decision gate explicitly tracked for live testing); `build/evidence-<sha>.json`, `build/evaluation-report.json`, and `build/release/release-manifest-<sha>.json` are verified and retained.

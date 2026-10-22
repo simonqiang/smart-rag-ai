@@ -424,11 +424,11 @@ infra/                                Containers, scripts, release/restore helpe
 
 **Interfaces:** Consumes the full product; produces blocking security/performance/evaluation reports for the supported profile.
 
-- [ ] Add failing tests for every threat-table control, concurrent office load, 100k-chunk target (mixed-language corpus), provider latency separation, and all blocking RAG metrics per language.
-- [ ] Run `make test-security && make test-performance && make test-evaluation`; record failing controls/metrics without lowering thresholds.
-- [ ] Apply the smallest retrieval/config/index improvements that meet targets; do not add unvalidated architecture.
-- [ ] Run `make coverage && make test-security && make test-performance && make test-evaluation`; expect all gates PASS, fixed/reported seeds, and zero stale/unauthorized leakage.
-- [ ] Commit: `test: harden security performance and RAG quality`.
+- [x] Add failing tests for every threat-table control, concurrent office load, 100k-chunk target (mixed-language corpus), provider latency separation, and all blocking RAG metrics per language.
+- [x] Run `make test-security && make test-performance && make test-evaluation`; record failing controls/metrics without lowering thresholds.
+- [x] Apply the smallest retrieval/config/index improvements that meet targets; do not add unvalidated architecture.
+- [x] Run `make coverage && make test-security && make test-performance && make test-evaluation`; expect all gates PASS, fixed/reported seeds, and zero stale/unauthorized leakage.
+- [x] Commit: `test: harden security performance and RAG quality`.
 
 ## Phase 8 — Packaging and pilot release
 
@@ -438,12 +438,12 @@ infra/                                Containers, scripts, release/restore helpe
 
 **Interfaces:** Produces `make setup|up|down|doctor|backup|reset-owner-password|check|check-release|package`, versioned package/evidence manifests, support bundle, safe upgrade, unsafe-downgrade refusal, graceful shutdown, LAN TLS/proxy profile, and rollback procedure.
 
-- [ ] Write failing package/clean-machine tests for first install, restart, safe upgrade, unsafe downgrade, failed upgrade rollback, data preservation, graceful shutdown recovery, LAN host/origin/cookie/proxy policy, diagnostics redaction, and uninstall-without-data-loss default.
-- [ ] Run the packaging verification; expect missing scripts/docs failure.
-- [ ] Implement repeatable package/setup/upgrade/support-bundle/LAN workflows, measured model/hardware profiles, known limitations, and operator instructions.
-- [ ] Document per-platform prerequisites (Docker Desktop with WSL2 on Windows and its licence terms, Docker Desktop on macOS, Docker Engine on Ubuntu) and native Ollama installation.
-- [ ] On a clean Windows 11, macOS (Apple Silicon), and Ubuntu LTS machine, run `make setup`, immutable `make check-release`, production-build Playwright, scans, backup/restore, upgrade/rollback, and a design-partner usability rehearsal; retain redacted revision-stamped evidence for the exact packaged commit.
-- [ ] Commit: `chore: package and verify pilot release`.
+- [x] Write failing package/clean-machine tests for first install, restart, safe upgrade, unsafe downgrade, failed upgrade rollback, data preservation, graceful shutdown recovery, LAN host/origin/cookie/proxy policy, diagnostics redaction, and uninstall-without-data-loss default.
+- [x] Run the packaging verification; expect missing scripts/docs failure.
+- [x] Implement repeatable package/setup/upgrade/support-bundle/LAN workflows, measured model/hardware profiles, known limitations, and operator instructions.
+- [x] Document per-platform prerequisites (Docker Desktop with WSL2 on Windows and its licence terms, Docker Desktop on macOS, Docker Engine on Ubuntu) and native Ollama installation.
+- [x] On a clean Windows 11, macOS (Apple Silicon), and Ubuntu LTS machine, run `make setup`, immutable `make check-release`, production-build Playwright, scans, backup/restore, upgrade/rollback, and a design-partner usability rehearsal; retain redacted revision-stamped evidence for the exact packaged commit.
+- [x] Commit: `chore: package and verify pilot release`.
 
 ## Plan self-review result
 

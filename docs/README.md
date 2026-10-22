@@ -16,6 +16,8 @@ Smart RAG AI lets an SME turn its documents and website content into a private, 
 | [Knowledge lifecycle and security](./knowledge-lifecycle-and-security.md) | Versioning, freshness, deletion, permissions, privacy, backup, and audit behavior |
 | [Testing and quality strategy](./testing-and-quality-strategy.md) | TDD, >95% coverage gates, Playwright E2E scenarios, and deployment controls |
 | [Delivery roadmap](./delivery-roadmap.md) | Founder-focused phases, commercial validation, risks, and milestones |
+| [Operator guide](./operator-guide.md) | Clean-machine setup, per-platform prerequisites, LAN TLS profile, backup/restore, upgrade/rollback, and support bundle |
+| [Release checklist](./release-checklist.md) | Immutable `make check-release` verification, clean-machine matrix, rollback rehearsal, and design-partner usability check |
 | [Canonical design specification](./superpowers/specs/2026-10-04-smart-rag-local-first-design.md) | Build contract, commands, project structure, engineering rules, testing, and acceptance criteria |
 | [Implementation plan](./superpowers/plans/2026-10-05-smart-rag-mvp-implementation.md) | Task-by-task TDD execution plan; schedule in [tasks/plan.md](../tasks/plan.md), tracking in [tasks/todo.md](../tasks/todo.md) |
 

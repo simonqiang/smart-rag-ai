@@ -8,7 +8,7 @@ GATES := lint typecheck test-unit test-api test-web test-integration test-securi
 
 .PHONY: setup doctor test-doctor test-evaluation lint typecheck test-unit test-api test-web \
 	test-integration test-security test-performance test-e2e test-e2e-full coverage build scan \
-	check check-release backup restore $(GATES)
+	check check-release backup restore upgrade support-bundle package $(GATES)
 
 setup:
 	$(UV) sync
@@ -43,6 +43,15 @@ backup:
 
 restore:
 	$(PYTHON) infra/scripts/backup_restore.py restore $(FILE)
+
+upgrade:
+	$(PYTHON) infra/scripts/upgrade.py run
+
+support-bundle:
+	$(PYTHON) infra/scripts/install.py support-bundle
+
+package:
+	$(PYTHON) infra/scripts/install.py package
 
 test-doctor:
 	$(PYTEST) tests/unit/foundation -v
