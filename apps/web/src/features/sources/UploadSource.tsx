@@ -4,7 +4,7 @@ import { detailText, getJson, postForm } from "../auth/api";
 
 type Collection = { collection_id: string; name: string };
 
-const fieldStyle = { display: "block", width: "100%", marginBottom: "0.75rem", padding: "0.5rem" } as const;
+const fieldStyle = { marginBottom: "0.75rem" } as const;
 
 /** Multipart body for POST /api/uploads. */
 export function uploadBody(file: File, collectionId: string, name: string): FormData {

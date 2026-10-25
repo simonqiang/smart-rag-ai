@@ -40,10 +40,12 @@ type Session = { role: string };
 const sectionStyle = { marginBottom: "2rem" } as const;
 const listStyle = { listStyle: "none", padding: 0 } as const;
 const rowStyle = {
-  border: "1px solid #ccc",
-  borderRadius: "4px",
-  padding: "0.75rem",
-  marginBottom: "0.5rem",
+  border: "1px solid var(--color-border)",
+  borderRadius: "var(--radius-md)",
+  padding: "0.85rem 1rem",
+  marginBottom: "0.6rem",
+  background: "var(--color-surface)",
+  boxShadow: "var(--shadow-xs)",
 } as const;
 
 /** ISO timestamp -> "YYYY-MM-DD HH:MM"; null -> "—". */
@@ -134,7 +136,7 @@ export default function ActivityPage() {
   }
 
   return (
-    <div>
+    <>
       <h1>Activity</h1>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
@@ -233,6 +235,6 @@ export default function ActivityPage() {
           </ul>
         )}
       </section>
-    </div>
+    </>
   );
 }

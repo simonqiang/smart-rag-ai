@@ -4,9 +4,11 @@ import type { Citation } from "./contracts";
 import { getJson } from "../auth/api";
 
 const panelStyle = {
-  border: "1px solid #0b57d0",
-  borderRadius: "4px",
-  padding: "0.75rem",
+  border: "1px solid var(--color-primary)",
+  borderRadius: "var(--radius-lg)",
+  background: "var(--color-surface)",
+  boxShadow: "var(--shadow-md)",
+  padding: "1rem",
   marginTop: "0.75rem",
 } as const;
 const quoteStyle = { margin: "0.5rem 0 0", whiteSpace: "pre-wrap" } as const;

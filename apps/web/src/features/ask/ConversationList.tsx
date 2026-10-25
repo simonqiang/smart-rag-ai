@@ -6,13 +6,15 @@ import { deleteJson, getJson, putJson } from "../auth/api";
 export type { ConversationDetail };
 
 const rowStyle = {
-  border: "1px solid #ddd",
-  borderRadius: "4px",
-  padding: "0.5rem",
-  marginBottom: "0.5rem",
+  border: "1px solid var(--color-border)",
+  borderRadius: "var(--radius-md)",
+  padding: "0.85rem 1rem",
+  marginBottom: "0.6rem",
+  background: "var(--color-surface)",
+  boxShadow: "var(--shadow-xs)",
 } as const;
 const rowActions = { display: "flex", gap: "0.5rem", flexWrap: "wrap" } as const;
-const buttonStyle = { padding: "0.4rem 0.6rem", minHeight: "44px" } as const;
+const buttonStyle = { minHeight: "44px" } as const;
 
 export type { ConversationSummary };
 

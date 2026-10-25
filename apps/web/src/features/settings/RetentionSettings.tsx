@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { detailText, getJson, putJson } from "../auth/api";
 
-const fieldStyle = { display: "block", width: "100%", marginBottom: "0.75rem", padding: "0.5rem" } as const;
+const fieldStyle = { marginBottom: "0.75rem" } as const;
 
 /** Free text -> day count, or null when it is not a positive integer. */
 export function toDays(raw: string): number | null {
@@ -66,7 +66,7 @@ export default function RetentionSettings() {
     toDays(supersededDays) !== null && toDays(conversationDays) !== null && toDays(backupDays) !== null;
 
   return (
-    <main style={{ maxWidth: "48rem", margin: "0 auto", padding: "1rem" }}>
+    <main>
       <h1>Retention</h1>
       <p>
         Expired superseded source versions, retired pages, unreferenced files, stale

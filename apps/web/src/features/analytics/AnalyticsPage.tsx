@@ -14,13 +14,15 @@ type Summary = {
 type Session = { role: string };
 
 const cardStyle = {
-  border: "1px solid #ccc",
-  borderRadius: "4px",
-  padding: "0.75rem",
+  border: "1px solid var(--color-border)",
+  borderRadius: "var(--radius-md)",
+  padding: "0.85rem 1rem",
   minWidth: "10rem",
   display: "inline-block",
   marginRight: "0.5rem",
   marginBottom: "0.5rem",
+  background: "var(--color-surface)",
+  boxShadow: "var(--shadow-xs)",
 } as const;
 const cardWrapStyle = { display: "flex", flexWrap: "wrap" } as const;
 

@@ -12,7 +12,7 @@ type ProviderState = {
   consent_version_current: string;
 };
 
-const fieldStyle = { display: "block", width: "100%", marginBottom: "0.75rem", padding: "0.5rem" } as const;
+const fieldStyle = { marginBottom: "0.75rem" } as const;
 
 /** ISO timestamp -> "YYYY-MM-DD HH:MM" (deterministic, no locale drift); null -> "—". */
 export function formatTime(iso: string | null): string {
@@ -116,7 +116,7 @@ export default function AIProviderSettings() {
   const canActivate = tested && consent && endpoint.length > 0 && model.length > 0 && !busy;
 
   return (
-    <main style={{ maxWidth: "48rem", margin: "0 auto", padding: "1rem" }}>
+    <main>
       <h1>AI provider</h1>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}

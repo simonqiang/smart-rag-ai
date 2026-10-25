@@ -2,8 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 
 import { type ApiResult, deleteJson, detailText, getJson, postJson, putJson } from "../auth/api";
 
-const fieldStyle = { display: "block", width: "100%", marginBottom: "0.75rem", padding: "0.5rem" } as const;
-const rowStyle = { border: "1px solid #ccc", borderRadius: "4px", padding: "0.75rem", marginBottom: "0.75rem" } as const;
+const fieldStyle = { marginBottom: "0.75rem" } as const;
+const rowStyle = {
+  border: "1px solid var(--color-border)",
+  borderRadius: "var(--radius-md)",
+  padding: "0.85rem 1rem",
+  marginBottom: "0.6rem",
+  background: "var(--color-surface)",
+  boxShadow: "var(--shadow-xs)",
+} as const;
 
 type ManagedUser = {
   user_id: string;
@@ -105,7 +112,7 @@ export default function UserAccessPage() {
 
   if (error && users.length === 0) {
     return (
-      <main style={{ maxWidth: "48rem", margin: "0 auto", padding: "1rem" }}>
+      <main>
         <h1>User access</h1>
         <p role="alert">{error}</p>
       </main>
@@ -113,7 +120,7 @@ export default function UserAccessPage() {
   }
 
   return (
-    <main style={{ maxWidth: "48rem", margin: "0 auto", padding: "1rem" }}>
+    <main>
       <h1>User access</h1>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}

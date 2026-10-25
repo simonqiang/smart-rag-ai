@@ -8,7 +8,7 @@ import {
   type SetupStatus,
 } from "./api";
 
-const fieldStyle = { display: "block", width: "100%", marginBottom: "0.75rem", padding: "0.5rem" } as const;
+const fieldStyle = { marginBottom: "0.75rem" } as const;
 
 function CheckList({ checks }: { checks: DependencyCheck[] }) {
   return (

@@ -67,7 +67,7 @@ export default function BackupRestore() {
   }
 
   return (
-    <main style={{ maxWidth: "48rem", margin: "0 auto", padding: "1rem" }}>
+    <main>
       <h1>Backup and restore</h1>
       <p>
         Backups are encrypted with the recovery key from the SMART_RAG_BACKUP_KEY

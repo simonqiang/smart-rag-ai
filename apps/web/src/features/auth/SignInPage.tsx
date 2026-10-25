@@ -3,7 +3,7 @@ import { useState } from "react";
 import { navigate } from "../../router";
 import { getJson, postJson, detailText } from "./api";
 
-const fieldStyle = { display: "block", width: "100%", marginBottom: "0.75rem", padding: "0.5rem" } as const;
+const fieldStyle = { marginBottom: "0.75rem" } as const;
 
 type Me = { email: string; must_change_password: boolean };
 

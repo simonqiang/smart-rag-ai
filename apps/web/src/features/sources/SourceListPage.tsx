@@ -14,10 +14,12 @@ type Source = {
 
 const listStyle = { listStyle: "none", padding: 0 } as const;
 const rowStyle = {
-  border: "1px solid #ccc",
-  borderRadius: "4px",
-  padding: "0.75rem",
-  marginBottom: "0.5rem",
+  border: "1px solid var(--color-border)",
+  borderRadius: "var(--radius-md)",
+  padding: "0.85rem 1rem",
+  marginBottom: "0.6rem",
+  background: "var(--color-surface)",
+  boxShadow: "var(--shadow-xs)",
 } as const;
 
 /** Catalog of the sources the signed-in user may see. */
@@ -66,7 +68,7 @@ export default function SourceListPage() {
   }, [load]);
 
   return (
-    <main style={{ maxWidth: "48rem", margin: "0 auto", padding: "1rem" }}>
+    <main>
       <h1>Sources</h1>
       {error && (
         <p role="alert">

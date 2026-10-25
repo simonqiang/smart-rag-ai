@@ -20,13 +20,15 @@ type Schedule = {
 
 export const MIN_INTERVAL_MINUTES = 5;
 
-const fieldStyle = { display: "block", width: "100%", marginBottom: "0.75rem", padding: "0.5rem" } as const;
+const fieldStyle = { marginBottom: "0.75rem" } as const;
 const listStyle = { listStyle: "none", padding: 0 } as const;
 const rowStyle = {
-  border: "1px solid #ccc",
-  borderRadius: "4px",
-  padding: "0.75rem",
-  marginBottom: "0.5rem",
+  border: "1px solid var(--color-border)",
+  borderRadius: "var(--radius-md)",
+  padding: "0.85rem 1rem",
+  marginBottom: "0.6rem",
+  background: "var(--color-surface)",
+  boxShadow: "var(--shadow-xs)",
 } as const;
 
 /** Lines -> trimmed non-empty prefixes, one per line. */

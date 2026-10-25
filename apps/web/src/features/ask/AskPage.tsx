@@ -10,23 +10,27 @@ import EvidencePanel from "./EvidencePanel";
 import { sendFeedback, statusLabel, useAsk } from "./useAsk";
 import { getJson } from "../auth/api";
 
-const pageStyle = { maxWidth: "64rem", margin: "0 auto", padding: "1rem" } as const;
-const layoutStyle = { display: "flex", flexWrap: "wrap", gap: "1rem" } as const;
+const layoutStyle = { display: "flex", flexWrap: "wrap", gap: "1.25rem", alignItems: "flex-start" } as const;
 const mainStyle = { flex: "2 1 24rem", minWidth: "0" } as const;
 const asideStyle = { flex: "1 1 16rem", minWidth: "0" } as const;
 const inputRowStyle = { display: "flex", gap: "0.5rem", flexWrap: "wrap" } as const;
-const questionStyle = { flex: "1 1 16rem", minWidth: "0", padding: "0.65rem" } as const;
-const buttonStyle = { padding: "0.65rem 0.9rem", minHeight: "44px" } as const;
+const questionStyle = { flex: "1 1 16rem", minWidth: "0" } as const;
+const buttonStyle = { minHeight: "44px" } as const;
+const selectStyle = { minHeight: "44px", width: "auto", flex: "0 1 auto" } as const;
 const answerStyle = {
-  border: "1px solid #ccc",
-  borderRadius: "4px",
-  padding: "0.75rem",
+  border: "1px solid var(--color-border)",
+  borderRadius: "var(--radius-md)",
+  background: "var(--color-surface)",
+  boxShadow: "var(--shadow-xs)",
+  padding: "1rem",
   marginTop: "0.75rem",
   whiteSpace: "pre-wrap",
 } as const;
 const badgeStyle = {
   display: "inline-block",
-  border: "1px solid #ccc",
+  border: "1px solid var(--color-border-strong)",
+  background: "var(--color-primary-soft)",
+  color: "var(--color-primary-strong)",
   borderRadius: "999px",
   padding: "0.2rem 0.7rem",
   fontSize: "0.85rem",
@@ -35,17 +39,19 @@ const badgeStyle = {
 const markerStyle = {
   margin: "0 0.15rem",
   padding: "0.1rem 0.45rem",
-  border: "1px solid #0b57d0",
-  borderRadius: "4px",
-  color: "#0b57d0",
-  background: "none",
+  minHeight: "44px",
+  border: "1px solid var(--color-primary)",
+  borderRadius: "var(--radius-sm)",
+  color: "var(--color-primary-strong)",
+  background: "var(--color-primary-soft)",
   cursor: "pointer",
 } as const;
 const historyStyle = { listStyle: "none", padding: 0 } as const;
 const historyRowStyle = {
-  border: "1px solid #ddd",
-  borderRadius: "4px",
-  padding: "0.6rem",
+  border: "1px solid var(--color-border)",
+  borderRadius: "var(--radius-md)",
+  background: "var(--color-surface)",
+  padding: "0.75rem 1rem",
   marginBottom: "0.5rem",
 } as const;
 
@@ -154,7 +160,7 @@ export default function AskPage() {
   const answer = state.answerText || state.rawText;
 
   return (
-    <main style={pageStyle}>
+    <main>
       <h1>Ask</h1>
       <div style={layoutStyle}>
         <div style={mainStyle}>
@@ -174,7 +180,7 @@ export default function AskPage() {
               aria-label="Filter sources"
               value={sourceId}
               onChange={(event) => setSourceId(event.target.value)}
-              style={buttonStyle}
+              style={selectStyle}
             >
               <option value="">All sources</option>
               {sources.map((source) => (
