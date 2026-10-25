@@ -84,7 +84,7 @@ faker==40.41.0
     # via polyfactory
 fastapi==0.142.2
     # via smart-rag-ai
-filelock==4.0.10
+filelock==4.2.4
     # via
     #   huggingface-hub
     #   torch
@@ -180,7 +180,7 @@ opencv-python==5.0.0.93
     # via rapidocr
 openpyxl==3.1.5
     # via docling-slim
-opentelemetry-api==1.45.0
+opentelemetry-api==1.45.1
     # via fastapi
 packaging==26.3
     # via
@@ -296,7 +296,7 @@ scipy==1.18.1
     # via docling-slim
 semchunk==3.2.5
     # via docling-core
-setuptools==84.0.0
+setuptools==84.2.1
     # via torch
 shapely==2.1.2
     # via rapidocr
