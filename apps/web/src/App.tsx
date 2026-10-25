@@ -64,10 +64,10 @@ function App() {
       </AppShell>
     );
   return (
-    <main>
+    <main className="landing">
       <h1>Smart RAG AI</h1>
       <p>Local-first knowledge assistant with trustworthy citations.</p>
-      <nav aria-label="primary">
+      <nav aria-label="primary" className="landing-actions">
         <a
           href="/setup"
           onClick={(event) => {
@@ -77,7 +77,6 @@ function App() {
         >
           Set up your workspace
         </a>
-        {" · "}
         <a
           href="/signin"
           onClick={(event) => {

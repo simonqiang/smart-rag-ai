@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { detailText, getJson, postJson } from "../auth/api";
 
+import "../../styles/settings.css";
+
 type ProviderState = {
   provider: string;
   endpoint: string | null;
@@ -11,8 +13,6 @@ type ProviderState = {
   consented_at: string | null;
   consent_version_current: string;
 };
-
-const fieldStyle = { marginBottom: "0.75rem" } as const;
 
 /** ISO timestamp -> "YYYY-MM-DD HH:MM" (deterministic, no locale drift); null -> "—". */
 export function formatTime(iso: string | null): string {
@@ -126,7 +126,7 @@ export default function AIProviderSettings() {
         {state === null ? (
           <p role="status">Loading provider state…</p>
         ) : (
-          <p data-testid="provider-summary">{stateSummary(state)}</p>
+          <p data-testid="provider-summary" className="provider-summary">{stateSummary(state)}</p>
         )}
       </section>
 
@@ -139,11 +139,10 @@ export default function AIProviderSettings() {
             server environment (SMART_RAG_GLM_API_KEY) and is never stored here.
             Switching never re-indexes your knowledge.
           </p>
-          <form onSubmit={testConnection}>
+          <form onSubmit={testConnection} className="stack">
             <label>
               Endpoint URL
               <input
-                style={fieldStyle}
                 type="url"
                 required
                 value={endpoint}
@@ -156,7 +155,6 @@ export default function AIProviderSettings() {
             <label>
               Model
               <input
-                style={fieldStyle}
                 required
                 value={model}
                 onChange={(event) => {
@@ -165,7 +163,7 @@ export default function AIProviderSettings() {
                 }}
               />
             </label>
-            <label>
+            <label className="settings-check">
               <input
                 type="checkbox"
                 checked={rewrite}
@@ -173,7 +171,7 @@ export default function AIProviderSettings() {
               />{" "}
               Also use GLM to rewrite questions before retrieval
             </label>
-            <label style={fieldStyle}>
+            <label className="settings-check">
               <input
                 type="checkbox"
                 checked={consent}

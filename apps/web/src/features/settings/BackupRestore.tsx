@@ -85,11 +85,11 @@ export default function BackupRestore() {
 
       <h2>Existing backups</h2>
       {backups === null ? null : backups.length === 0 ? (
-        <p>No backups yet.</p>
+        <p className="empty-state">No backups yet.</p>
       ) : (
-        <ul>
+        <ul className="msg-list">
           {backups.map((backup) => (
-            <li key={backup.id}>
+            <li key={backup.id} className="msg">
               <code>{backup.filename}</code> — {formatSize(backup.size_bytes)} —{" "}
               {formatWhen(backup.created_at)} — {backup.source_count} source
               {backup.source_count === 1 ? "" : "s"}

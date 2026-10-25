@@ -13,19 +13,6 @@ type Summary = {
 
 type Session = { role: string };
 
-const cardStyle = {
-  border: "1px solid var(--color-border)",
-  borderRadius: "var(--radius-md)",
-  padding: "0.85rem 1rem",
-  minWidth: "10rem",
-  display: "inline-block",
-  marginRight: "0.5rem",
-  marginBottom: "0.5rem",
-  background: "var(--color-surface)",
-  boxShadow: "var(--shadow-xs)",
-} as const;
-const cardWrapStyle = { display: "flex", flexWrap: "wrap" } as const;
-
 /** Coverage of feedback over completed exchanges, as a percent string. */
 export function feedbackCoverage(summary: Summary): string {
   if (summary.exchanges === 0) return "—";
@@ -78,36 +65,30 @@ export default function AnalyticsPage() {
         <p role="status">No questions asked yet.</p>
       )}
       {summary !== null && summary.exchanges + summary.unanswered_conversations > 0 && (
-        <div style={cardWrapStyle}>
-          <div style={cardStyle} data-testid="card-exchanges">
-            <strong>{summary.exchanges}</strong>
-            <br />
-            answered exchanges
+        <div className="stat-grid">
+          <div className="stat-tile" data-testid="card-exchanges">
+            <span className="stat-value">{summary.exchanges}</span>
+            <span className="stat-label">answered exchanges</span>
           </div>
-          <div style={cardStyle} data-testid="card-helpful">
-            <strong>{summary.helpful}</strong>
-            <br />
-            marked helpful
+          <div className="stat-tile" data-testid="card-helpful">
+            <span className="stat-value">{summary.helpful}</span>
+            <span className="stat-label">marked helpful</span>
           </div>
-          <div style={cardStyle} data-testid="card-unhelpful">
-            <strong>{summary.unhelpful}</strong>
-            <br />
-            marked not helpful
+          <div className="stat-tile" data-testid="card-unhelpful">
+            <span className="stat-value">{summary.unhelpful}</span>
+            <span className="stat-label">marked not helpful</span>
           </div>
-          <div style={cardStyle} data-testid="card-coverage">
-            <strong>{feedbackCoverage(summary)}</strong>
-            <br />
-            feedback coverage
+          <div className="stat-tile" data-testid="card-coverage">
+            <span className="stat-value">{feedbackCoverage(summary)}</span>
+            <span className="stat-label">feedback coverage</span>
           </div>
-          <div style={cardStyle} data-testid="card-insufficient">
-            <strong>{summary.insufficient_evidence}</strong>
-            <br />
-            no evidence found
+          <div className="stat-tile" data-testid="card-insufficient">
+            <span className="stat-value">{summary.insufficient_evidence}</span>
+            <span className="stat-label">no evidence found</span>
           </div>
-          <div style={cardStyle} data-testid="card-unanswered">
-            <strong>{summary.unanswered_conversations}</strong>
-            <br />
-            unanswered questions
+          <div className="stat-tile" data-testid="card-unanswered">
+            <span className="stat-value">{summary.unanswered_conversations}</span>
+            <span className="stat-label">unanswered questions</span>
           </div>
         </div>
       )}

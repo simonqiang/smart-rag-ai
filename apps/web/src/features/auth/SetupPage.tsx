@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
+import "../../styles/auth.css";
+
 import {
   getJson,
   postJson,
@@ -7,8 +9,6 @@ import {
   type DependencyCheck,
   type SetupStatus,
 } from "./api";
-
-const fieldStyle = { marginBottom: "0.75rem" } as const;
 
 function CheckList({ checks }: { checks: DependencyCheck[] }) {
   return (
@@ -80,7 +80,7 @@ export default function SetupPage() {
 
   if (done) {
     return (
-      <main>
+      <main className="auth-main">
         <h1>Workspace ready</h1>
         <p>
           The first owner account is created and you are signed in. Continue to{" "}
@@ -91,7 +91,7 @@ export default function SetupPage() {
   }
 
   return (
-    <main>
+    <main className="auth-main">
       <h1>Set up your workspace</h1>
       {loadError ? <p role="alert">{loadError}</p> : null}
       {status === null && !loadError ? <p>Checking dependencies…</p> : null}
@@ -109,7 +109,6 @@ export default function SetupPage() {
           <label>
             Owner email
             <input
-              style={fieldStyle}
               type="email"
               required
               value={email}
@@ -119,7 +118,6 @@ export default function SetupPage() {
           <label>
             Password (at least 10 characters)
             <input
-              style={fieldStyle}
               type="password"
               required
               minLength={10}
@@ -130,7 +128,6 @@ export default function SetupPage() {
           <label>
             Repeat password
             <input
-              style={fieldStyle}
               type="password"
               required
               value={confirm}

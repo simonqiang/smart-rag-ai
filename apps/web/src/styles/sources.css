@@ -1,0 +1,45 @@
+/* Sources feature area: source catalog, upload form, version history,
+   web-sync schedules. Shared primitives (.card, .row, .stack, .badge, …)
+   live in tokens.css. */
+
+/* Muted state label after a source name. */
+.source-state {
+  color: var(--color-text-muted);
+}
+
+/* Version history rows inside a source card. */
+.version-list > li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.version-row {
+  padding: var(--space-xs) 0;
+}
+
+.version-row > span:first-child {
+  font-weight: 650;
+}
+
+.version-row > span:nth-child(2),
+.version-row > span:nth-child(3) {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+/* Upload panel: dropzone-styled file field. */
+.upload-panel {
+  margin-top: var(--space-xl);
+}
+
+.upload-file-field {
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-soft);
+  padding: var(--space-lg);
+}
+
+/* Destructive confirmation line inside the source card. */
+.delete-confirm {
+  color: var(--color-danger-text);
+  font-weight: 600;
+}

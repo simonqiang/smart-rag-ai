@@ -9,51 +9,7 @@ import ConversationList, { type ConversationDetail } from "./ConversationList";
 import EvidencePanel from "./EvidencePanel";
 import { sendFeedback, statusLabel, useAsk } from "./useAsk";
 import { getJson } from "../auth/api";
-
-const layoutStyle = { display: "flex", flexWrap: "wrap", gap: "1.25rem", alignItems: "flex-start" } as const;
-const mainStyle = { flex: "2 1 24rem", minWidth: "0" } as const;
-const asideStyle = { flex: "1 1 16rem", minWidth: "0" } as const;
-const inputRowStyle = { display: "flex", gap: "0.5rem", flexWrap: "wrap" } as const;
-const questionStyle = { flex: "1 1 16rem", minWidth: "0" } as const;
-const buttonStyle = { minHeight: "44px" } as const;
-const selectStyle = { minHeight: "44px", width: "auto", flex: "0 1 auto" } as const;
-const answerStyle = {
-  border: "1px solid var(--color-border)",
-  borderRadius: "var(--radius-md)",
-  background: "var(--color-surface)",
-  boxShadow: "var(--shadow-xs)",
-  padding: "1rem",
-  marginTop: "0.75rem",
-  whiteSpace: "pre-wrap",
-} as const;
-const badgeStyle = {
-  display: "inline-block",
-  border: "1px solid var(--color-border-strong)",
-  background: "var(--color-primary-soft)",
-  color: "var(--color-primary-strong)",
-  borderRadius: "999px",
-  padding: "0.2rem 0.7rem",
-  fontSize: "0.85rem",
-  marginTop: "0.5rem",
-} as const;
-const markerStyle = {
-  margin: "0 0.15rem",
-  padding: "0.1rem 0.45rem",
-  minHeight: "44px",
-  border: "1px solid var(--color-primary)",
-  borderRadius: "var(--radius-sm)",
-  color: "var(--color-primary-strong)",
-  background: "var(--color-primary-soft)",
-  cursor: "pointer",
-} as const;
-const historyStyle = { listStyle: "none", padding: 0 } as const;
-const historyRowStyle = {
-  border: "1px solid var(--color-border)",
-  borderRadius: "var(--radius-md)",
-  background: "var(--color-surface)",
-  padding: "0.75rem 1rem",
-  marginBottom: "0.5rem",
-} as const;
+import "../../styles/ask.css";
 
 type Source = { source_id: string; name: string };
 
@@ -85,7 +41,7 @@ function MessageBody({
           <button
             key={index}
             type="button"
-            style={markerStyle}
+            className="cite-chip"
             aria-label={`Open citation ${segment.label}`}
             onClick={() => {
               const citation = byLabel.get(segment.label);
@@ -162,16 +118,13 @@ export default function AskPage() {
   return (
     <main>
       <h1>Ask</h1>
-      <div style={layoutStyle}>
-        <div style={mainStyle}>
-          <form onSubmit={submit} style={inputRowStyle}>
-            <label style={{ flex: "1 1 100%" }} htmlFor="question">
-              Your question
-            </label>
+      <div className="ask-layout">
+        <div className="ask-main">
+          <form onSubmit={submit} className="row ask-form">
+            <label htmlFor="question">Your question</label>
             <input
               id="question"
               name="question"
-              style={questionStyle}
               value={question}
               placeholder="Ask about your indexed documents…"
               onChange={(event) => setQuestion(event.target.value)}
@@ -180,7 +133,6 @@ export default function AskPage() {
               aria-label="Filter sources"
               value={sourceId}
               onChange={(event) => setSourceId(event.target.value)}
-              style={selectStyle}
             >
               <option value="">All sources</option>
               {sources.map((source) => (
@@ -192,13 +144,12 @@ export default function AskPage() {
             {/* One stable control: swapping buttons under a click re-targets it. */}
             <button
               type={busy ? "button" : "submit"}
-              style={buttonStyle}
               onClick={busy ? stopAndCancel : undefined}
               disabled={!busy && !question.trim()}
             >
               {busy ? "Stop" : "Ask"}
             </button>
-            <button type="button" style={buttonStyle} onClick={startNewConversation}>
+            <button type="button" className="btn-ghost" onClick={startNewConversation}>
               New conversation
             </button>
           </form>
@@ -217,7 +168,7 @@ export default function AskPage() {
               </p>
             )}
             {answer && (
-              <section style={answerStyle} lang={state.language} aria-label="Answer">
+              <section className="answer-card" lang={state.language} aria-label="Answer">
                 <MessageBody
                   content={answer}
                   citations={state.citations}
@@ -234,7 +185,7 @@ export default function AskPage() {
 
           {(state.status === "done" || state.status === "insufficient") && (
             <>
-              <p style={badgeStyle}>{providerText(provider)}</p>
+              <p className="badge ask-provider">{providerText(provider)}</p>
               {state.status === "done" && (
                 <p>
                   {feedbackGiven ? (
@@ -243,7 +194,7 @@ export default function AskPage() {
                     <>
                       <button
                         type="button"
-                        style={buttonStyle}
+                        className="btn-ghost"
                         onClick={() => {
                           setFeedbackGiven(true);
                           void sendFeedback(state.requestId ?? "", true);
@@ -253,7 +204,7 @@ export default function AskPage() {
                       </button>{" "}
                       <button
                         type="button"
-                        style={buttonStyle}
+                        className="btn-ghost"
                         onClick={() => {
                           setFeedbackGiven(true);
                           void sendFeedback(state.requestId ?? "", false);
@@ -276,10 +227,15 @@ export default function AskPage() {
           {history && (
             <section aria-label="Conversation history">
               <h2>Conversation history</h2>
-              <ol style={historyStyle}>
+              <ol className="msg-list">
                 {history.map((message, index) => (
-                  <li key={index} style={historyRowStyle}>
-                    <strong>{message.role === "user" ? "You" : "Assistant"}</strong>{" "}
+                  <li
+                    key={index}
+                    className={message.role === "user" ? "msg msg-user" : "msg"}
+                  >
+                    <strong className="msg-role">
+                      {message.role === "user" ? "You" : "Assistant"}
+                    </strong>{" "}
                     <span lang={message.language ?? undefined}>
                       <MessageBody
                         content={message.content}
@@ -293,7 +249,7 @@ export default function AskPage() {
             </section>
           )}
         </div>
-        <aside style={asideStyle}>
+        <aside className="ask-aside">
           <ConversationList
             epoch={epoch}
             onReopen={reopen}

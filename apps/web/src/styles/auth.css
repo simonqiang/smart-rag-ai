@@ -1,0 +1,22 @@
+/* Auth pages (sign in / setup): a focused, centered form. */
+
+.auth-main {
+  max-width: 26rem;
+}
+
+.auth-main form {
+  margin-top: var(--space-md);
+}
+
+.auth-main label {
+  margin-bottom: var(--space-md);
+}
+
+.auth-main button[type="submit"] {
+  width: 100%;
+}
+
+.auth-switch {
+  justify-content: center;
+  margin-top: var(--space-md);
+}

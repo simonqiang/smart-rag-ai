@@ -27,14 +27,6 @@ type Props = {
   canManage: boolean;
 };
 
-const rowStyle = {
-  display: "flex",
-  flexWrap: "wrap" as const,
-  gap: "0.5rem",
-  alignItems: "center",
-  padding: "0.25rem 0",
-};
-
 /** Expandable version history with cutover and rollback controls. */
 export default function VersionHistory({ sourceId, canManage }: Props) {
   const [open, setOpen] = useState(false);
@@ -78,17 +70,17 @@ export default function VersionHistory({ sourceId, canManage }: Props) {
 
   return (
     <section>
-      <button type="button" onClick={toggle} aria-expanded={open}>
+      <button type="button" className="btn-ghost" onClick={toggle} aria-expanded={open}>
         {open ? "Hide versions" : "Version history"}
       </button>
       {error && <p role="alert">{error}</p>}
       {open && versions === null && !error && <p role="status">Loading versions…</p>}
       {open && versions !== null && (
-        <ul style={{ listStyle: "none", padding: 0 }}>
+        <ul className="msg-list version-list">
           {versions.map((version) => {
             const actions = versionActions(version);
             return (
-              <li key={version.version_id} style={rowStyle}>
+              <li key={version.version_id} className="row version-row">
                 <span>{version.filename}</span>
                 <span>· {version.state}</span>
                 <span>· {new Date(version.created_at).toLocaleString()}</span>

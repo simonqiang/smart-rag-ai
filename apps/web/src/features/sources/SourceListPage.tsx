@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import "../../styles/sources.css";
 import DeleteSourceDialog from "./DeleteSourceDialog";
 import UploadSource from "./UploadSource";
 import VersionHistory from "./VersionHistory";
@@ -11,16 +12,6 @@ type Source = {
   name: string;
   state: string;
 };
-
-const listStyle = { listStyle: "none", padding: 0 } as const;
-const rowStyle = {
-  border: "1px solid var(--color-border)",
-  borderRadius: "var(--radius-md)",
-  padding: "0.85rem 1rem",
-  marginBottom: "0.6rem",
-  background: "var(--color-surface)",
-  boxShadow: "var(--shadow-xs)",
-} as const;
 
 /** Catalog of the sources the signed-in user may see. */
 export default function SourceListPage() {
@@ -80,26 +71,29 @@ export default function SourceListPage() {
       )}
       {sources === null && !error && <p role="status">Loading sources…</p>}
       {sources !== null && sources.length === 0 && !canUpload && (
-        <p>No sources yet. An administrator can add the first source.</p>
+        <p className="empty-state">No sources yet. An administrator can add the first source.</p>
       )}
       {sources !== null && sources.length === 0 && canUpload && (
-        <p>No sources yet. Upload the first one below.</p>
+        <p className="empty-state">No sources yet. Upload the first one below.</p>
       )}
       {canUpload && <UploadSource />}
       {sources !== null && sources.length > 0 && (
-        <ul style={listStyle}>
+        <ul className="msg-list">
           {sources.map((source) => (
-            <li key={source.source_id} style={rowStyle}>
-              <strong>{source.name}</strong> · {source.state}{" "}
-              {canUpload && (source.state === "active" || source.state === "archived") && (
-                <button
-                  type="button"
-                  disabled={busyId !== null}
-                  onClick={() => void toggleArchive(source.source_id, source.state)}
-                >
-                  {source.state === "active" ? "Archive" : "Unarchive"}
-                </button>
-              )}
+            <li key={source.source_id} className="card stack">
+              <div className="row">
+                <strong>{source.name}</strong> ·{" "}
+                <span className="source-state">{source.state}</span>{" "}
+                {canUpload && (source.state === "active" || source.state === "archived") && (
+                  <button
+                    type="button"
+                    disabled={busyId !== null}
+                    onClick={() => void toggleArchive(source.source_id, source.state)}
+                  >
+                    {source.state === "active" ? "Archive" : "Unarchive"}
+                  </button>
+                )}
+              </div>
               <VersionHistory sourceId={source.source_id} canManage={canUpload} />
               {canUpload && source.state !== "deleted" && (
                 <DeleteSourceDialog

@@ -20,16 +20,13 @@ type Schedule = {
 
 export const MIN_INTERVAL_MINUTES = 5;
 
-const fieldStyle = { marginBottom: "0.75rem" } as const;
-const listStyle = { listStyle: "none", padding: 0 } as const;
-const rowStyle = {
-  border: "1px solid var(--color-border)",
-  borderRadius: "var(--radius-md)",
-  padding: "0.85rem 1rem",
-  marginBottom: "0.6rem",
-  background: "var(--color-surface)",
-  boxShadow: "var(--shadow-xs)",
-} as const;
+/** Badge modifier for one schedule's freshness state (paused beats all). */
+export function stateBadgeClass(schedule: Pick<Schedule, "enabled" | "last_state">): string {
+  if (!schedule.enabled) return "badge badge-warn";
+  if (schedule.last_state === "synced") return "badge badge-ok";
+  if (schedule.last_state === "failed") return "badge badge-danger";
+  return "badge badge-warn";
+}
 
 /** Lines -> trimmed non-empty prefixes, one per line. */
 export function parsePrefixes(raw: string): string[] {
@@ -155,14 +152,19 @@ export default function WebSyncPanel({ canManage }: { canManage: boolean }) {
       {notice && <p role="status">{notice}</p>}
 
       {schedules !== null && schedules.length === 0 && (
-        <p>No websites synced yet.</p>
+        <p className="empty-state">No websites synced yet.</p>
       )}
       {schedules !== null && schedules.length > 0 && (
-        <ul style={listStyle}>
+        <ul className="msg-list">
           {schedules.map((schedule) => (
-            <li key={schedule.schedule_id} style={rowStyle}>
+            <li key={schedule.schedule_id} className="card">
               <strong>{schedule.name}</strong>{" "}
-              <span data-testid={`sync-state-${schedule.schedule_id}`}>{stateChip(schedule)}</span>
+              <span
+                className={stateBadgeClass(schedule)}
+                data-testid={`sync-state-${schedule.schedule_id}`}
+              >
+                {stateChip(schedule)}
+              </span>
               <br />
               <span>{schedule.start_url}</span>
               <br />
@@ -175,7 +177,7 @@ export default function WebSyncPanel({ canManage }: { canManage: boolean }) {
                 <><br /><span>{schedule.last_detail}</span></>
               )}
               {canManage && (
-                <div>
+                <div className="row">
                   <button type="button" disabled={busy} onClick={() => void syncNow(schedule.schedule_id)}>
                     Sync now
                   </button>{" "}
@@ -190,12 +192,11 @@ export default function WebSyncPanel({ canManage }: { canManage: boolean }) {
       )}
 
       {canManage && collections.length > 0 && (
-        <form onSubmit={addWebsite} aria-label="Add website">
+        <form onSubmit={addWebsite} aria-label="Add website" className="card stack">
           <h3>Add a website</h3>
           <label>
             Collection
             <select
-              style={fieldStyle}
               value={collectionId}
               onChange={(event) => setCollectionId(event.target.value)}
             >
@@ -209,7 +210,6 @@ export default function WebSyncPanel({ canManage }: { canManage: boolean }) {
           <label>
             Name
             <input
-              style={fieldStyle}
               required
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -218,7 +218,6 @@ export default function WebSyncPanel({ canManage }: { canManage: boolean }) {
           <label>
             Start URL
             <input
-              style={fieldStyle}
               type="url"
               required
               value={startUrl}
@@ -228,7 +227,6 @@ export default function WebSyncPanel({ canManage }: { canManage: boolean }) {
           <label>
             Sitemap URL (optional)
             <input
-              style={fieldStyle}
               type="url"
               value={sitemapUrl}
               onChange={(event) => setSitemapUrl(event.target.value)}
@@ -237,7 +235,6 @@ export default function WebSyncPanel({ canManage }: { canManage: boolean }) {
           <label>
             Allowed path prefixes (one per line, optional)
             <textarea
-              style={fieldStyle}
               rows={3}
               value={prefixes}
               onChange={(event) => setPrefixes(event.target.value)}
@@ -246,7 +243,6 @@ export default function WebSyncPanel({ canManage }: { canManage: boolean }) {
           <label>
             Sync every (minutes)
             <input
-              style={fieldStyle}
               type="number"
               min={MIN_INTERVAL_MINUTES}
               step={1}

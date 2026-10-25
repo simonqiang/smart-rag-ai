@@ -2,8 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 
 import { detailText, getJson, putJson } from "../auth/api";
 
-const fieldStyle = { marginBottom: "0.75rem" } as const;
-
 /** Free text -> day count, or null when it is not a positive integer. */
 export function toDays(raw: string): number | null {
   const value = Number(raw);
@@ -76,11 +74,10 @@ export default function RetentionSettings() {
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
 
-      <form onSubmit={save}>
+      <form onSubmit={save} className="stack">
         <label>
           Keep superseded versions and retired pages for (days)
           <input
-            style={fieldStyle}
             type="number"
             min={1}
             step={1}
@@ -92,7 +89,6 @@ export default function RetentionSettings() {
         <label>
           Keep idle conversations for (days)
           <input
-            style={fieldStyle}
             type="number"
             min={1}
             step={1}
@@ -104,7 +100,6 @@ export default function RetentionSettings() {
         <label>
           Keep managed backups for (days)
           <input
-            style={fieldStyle}
             type="number"
             min={1}
             step={1}

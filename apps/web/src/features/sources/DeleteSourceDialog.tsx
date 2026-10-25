@@ -44,18 +44,18 @@ export default function DeleteSourceDialog({ sourceId, sourceName, onDeleted }: 
 
   if (!confirming) {
     return (
-      <button type="button" onClick={request}>
+      <button type="button" className="btn-danger" onClick={request}>
         Delete…
       </button>
     );
   }
   return (
-    <span role="group" aria-label={`Permanently delete ${sourceName}`}>
+    <span role="group" aria-label={`Permanently delete ${sourceName}`} className="row delete-confirm">
       Delete forever? Answers citing it will show a deletion notice.
-      <button type="button" disabled={busy} onClick={() => void confirm()}>
+      <button type="button" className="btn-danger" disabled={busy} onClick={() => void confirm()}>
         Delete forever
       </button>
-      <button type="button" disabled={busy} onClick={cancel}>
+      <button type="button" className="btn-ghost" disabled={busy} onClick={cancel}>
         Keep
       </button>
       {error && <p role="alert">{error}</p>}

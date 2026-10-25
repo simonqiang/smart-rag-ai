@@ -2,15 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { type ApiResult, deleteJson, detailText, getJson, postJson, putJson } from "../auth/api";
 
-const fieldStyle = { marginBottom: "0.75rem" } as const;
-const rowStyle = {
-  border: "1px solid var(--color-border)",
-  borderRadius: "var(--radius-md)",
-  padding: "0.85rem 1rem",
-  marginBottom: "0.6rem",
-  background: "var(--color-surface)",
-  boxShadow: "var(--shadow-xs)",
-} as const;
+import "../../styles/settings.css";
 
 type ManagedUser = {
   user_id: string;
@@ -127,11 +119,10 @@ export default function UserAccessPage() {
 
       <section aria-labelledby="invite-heading">
         <h2 id="invite-heading">Invite a user</h2>
-        <form onSubmit={invite}>
+        <form onSubmit={invite} className="stack">
           <label>
             Email
             <input
-              style={fieldStyle}
               type="email"
               required
               value={inviteEmail}
@@ -141,7 +132,6 @@ export default function UserAccessPage() {
           <label>
             Role
             <select
-              style={fieldStyle}
               value={inviteRole}
               onChange={(event) => setInviteRole(event.target.value as "member" | "admin")}
             >
@@ -152,7 +142,6 @@ export default function UserAccessPage() {
           <label>
             Collections (comma-separated)
             <input
-              style={fieldStyle}
               value={inviteCollections}
               onChange={(event) => setInviteCollections(event.target.value)}
             />
@@ -167,12 +156,13 @@ export default function UserAccessPage() {
         <section aria-labelledby="pending-heading">
           <h2 id="pending-heading">Pending invitations</h2>
           {invitations.map((invitation) => (
-            <div key={invitation.invitation_id} style={rowStyle}>
-              {invitation.email} · {invitation.role} · {invitation.collections.join(", ") || "no collections"}
+            <div key={invitation.invitation_id} className="settings-row">
+              {invitation.email} · <span className="badge">{invitation.role}</span> ·{" "}
+              {invitation.collections.join(", ") || "no collections"}
               <button
                 type="button"
+                className="btn-danger"
                 disabled={busy}
-                style={{ marginLeft: "0.5rem" }}
                 onClick={() =>
                   act(
                     () => deleteJson(`/api/users/invitations/${invitation.invitation_id}`),
@@ -194,13 +184,15 @@ export default function UserAccessPage() {
           const setDraft = (patch: Partial<typeof draft>) =>
             setDrafts((current) => ({ ...current, [user.user_id]: { ...draft, ...patch } }));
           return (
-            <div key={user.user_id} style={rowStyle}>
-              <strong>{user.email}</strong> · {user.role} · {user.status}
+            <div key={user.user_id} className="settings-row">
+              <strong>{user.email}</strong> · <span className="badge">{user.role}</span> ·{" "}
+              <span className={user.status === "active" ? "badge badge-ok" : "badge badge-danger"}>
+                {user.status}
+              </span>
               {user.must_change_password && " · must change password"}
               <label>
                 Collections (comma-separated)
                 <input
-                  style={fieldStyle}
                   value={draft.collections}
                   onChange={(event) => setDraft({ collections: event.target.value })}
                 />
@@ -208,7 +200,6 @@ export default function UserAccessPage() {
               <label>
                 New password (reset)
                 <input
-                  style={fieldStyle}
                   type="text"
                   autoComplete="off"
                   value={draft.password}
@@ -247,6 +238,7 @@ export default function UserAccessPage() {
               </button>{" "}
               <button
                 type="button"
+                className="btn-danger"
                 disabled={busy || user.status !== "active"}
                 onClick={() =>
                   act(() => postJson(`/api/users/${user.user_id}/disable`, undefined), "user disabled")

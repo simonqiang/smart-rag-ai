@@ -1,9 +1,8 @@
 import { useState } from "react";
 
 import { navigate } from "../../router";
+import "../../styles/auth.css";
 import { getJson, postJson, detailText } from "./api";
-
-const fieldStyle = { marginBottom: "0.75rem" } as const;
 
 type Me = { email: string; must_change_password: boolean };
 
@@ -68,14 +67,13 @@ export default function SignInPage() {
 
   if (me?.must_change_password) {
     return (
-      <main>
+      <main className="auth-main">
         <h1>Choose a new password</h1>
         <p>Your account uses a temporary password; change it to continue.</p>
         <form onSubmit={(event) => void changePassword(event)}>
           <label>
             New password (at least 10 characters)
             <input
-              style={fieldStyle}
               type="password"
               required
               minLength={10}
@@ -94,7 +92,7 @@ export default function SignInPage() {
 
   if (me) {
     return (
-      <main>
+      <main className="auth-main">
         <h1>Signed in</h1>
         <p>Welcome back, {me.email}.</p>
       </main>
@@ -102,14 +100,13 @@ export default function SignInPage() {
   }
 
   return (
-    <main>
+    <main className="auth-main">
       <h1>{mode === "signin" ? "Sign in" : "Accept invitation"}</h1>
       <form onSubmit={(event) => void submit(event)}>
         {mode === "signin" ? (
           <label>
             Email
             <input
-              style={fieldStyle}
               type="email"
               required
               value={email}
@@ -120,7 +117,6 @@ export default function SignInPage() {
           <label>
             Invitation token
             <input
-              style={fieldStyle}
               type="text"
               required
               value={token}
@@ -131,7 +127,6 @@ export default function SignInPage() {
         <label>
           Password (at least 10 characters)
           <input
-            style={fieldStyle}
             type="password"
             required
             minLength={10}
@@ -143,7 +138,7 @@ export default function SignInPage() {
           {busy ? "Working…" : mode === "signin" ? "Sign in" : "Accept invitation"}
         </button>
       </form>
-      <p>
+      <p className="row auth-switch">
         {mode === "signin" ? (
           <a
             href="/signin"

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import "../../styles/ops.css";
 import { detailText, getJson, postJson } from "../auth/api";
 
 type Job = {
@@ -37,16 +38,19 @@ type DiagnosticCheck = {
 
 type Session = { role: string };
 
-const sectionStyle = { marginBottom: "2rem" } as const;
-const listStyle = { listStyle: "none", padding: 0 } as const;
-const rowStyle = {
-  border: "1px solid var(--color-border)",
-  borderRadius: "var(--radius-md)",
-  padding: "0.85rem 1rem",
-  marginBottom: "0.6rem",
-  background: "var(--color-surface)",
-  boxShadow: "var(--shadow-xs)",
-} as const;
+/** Job state -> badge variant: failed is danger, completed is ok, rest warn. */
+function stateBadgeClass(state: string): string {
+  if (state === "failed") return "badge badge-danger";
+  if (state === "completed") return "badge badge-ok";
+  return "badge badge-warn";
+}
+
+/** Doctor status -> badge variant. */
+function checkBadgeClass(status: DiagnosticCheck["status"]): string {
+  if (status === "fail") return "badge badge-danger";
+  if (status === "warn") return "badge badge-warn";
+  return "badge badge-ok";
+}
 
 /** ISO timestamp -> "YYYY-MM-DD HH:MM"; null -> "—". */
 export function formatTime(iso: string | null): string {
@@ -141,15 +145,17 @@ export default function ActivityPage() {
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
 
-      <section aria-labelledby="jobs-heading" style={sectionStyle}>
+      <section aria-labelledby="jobs-heading" className="ops-section">
         <h2 id="jobs-heading">Jobs</h2>
         {jobs !== null && jobs.items.length === 0 && <p>No background jobs yet.</p>}
         {jobs !== null && jobs.items.length > 0 && (
-          <ul style={listStyle}>
+          <ul className="msg-list">
             {jobs.items.map((job) => (
-              <li key={job.job_id} style={rowStyle}>
+              <li key={job.job_id} className="ops-row">
                 <strong>{job.type}</strong>{" "}
-                <span data-testid={`job-state-${job.job_id}`}>{job.state}</span>
+                <span className={stateBadgeClass(job.state)} data-testid={`job-state-${job.job_id}`}>
+                  {job.state}
+                </span>
                 <br />
                 <span>
                   attempts: {job.attempts} · created: {formatTime(job.created_at)}
@@ -161,7 +167,7 @@ export default function ActivityPage() {
                   </>
                 )}
                 {isOperator && canRetry(job.state) && (
-                  <div>
+                  <div className="ops-actions">
                     <button type="button" disabled={busy} onClick={() => void retry(job.job_id)}>
                       Retry
                     </button>
@@ -173,13 +179,13 @@ export default function ActivityPage() {
         )}
       </section>
 
-      <section aria-labelledby="health-heading" style={sectionStyle}>
+      <section aria-labelledby="health-heading" className="ops-section">
         <h2 id="health-heading">Source health</h2>
         {sources !== null && sources.items.length === 0 && <p>No sources yet.</p>}
         {sources !== null && sources.items.length > 0 && (
-          <ul style={listStyle}>
+          <ul className="msg-list">
             {sources.items.map((source) => (
-              <li key={source.source_id} style={rowStyle}>
+              <li key={source.source_id} className="ops-row">
                 <strong>{source.name}</strong>{" "}
                 <span>{source.latest_version_state ?? "no versions"}</span>
                 <br />
@@ -192,13 +198,13 @@ export default function ActivityPage() {
         )}
       </section>
 
-      <section aria-labelledby="audit-heading" style={sectionStyle}>
+      <section aria-labelledby="audit-heading" className="ops-section">
         <h2 id="audit-heading">Audit log</h2>
         {audit !== null && audit.items.length === 0 && <p>No audit events yet.</p>}
         {audit !== null && audit.items.length > 0 && (
-          <ul style={listStyle}>
+          <ul className="msg-list">
             {audit.items.map((entry) => (
-              <li key={entry.event_id} style={rowStyle}>
+              <li key={entry.event_id} className="ops-row">
                 <strong>{entry.type}</strong>
                 <br />
                 <span>
@@ -210,18 +216,20 @@ export default function ActivityPage() {
         )}
       </section>
 
-      <section aria-labelledby="diagnostics-heading" style={sectionStyle}>
+      <section aria-labelledby="diagnostics-heading" className="ops-section">
         <h2 id="diagnostics-heading">Diagnostics</h2>
         {checks !== null && (
           <p>Host: {host}</p>
         )}
         {checks !== null && checks.length === 0 && <p>No diagnostics available.</p>}
         {checks !== null && checks.length > 0 && (
-          <ul style={listStyle}>
+          <ul className="msg-list">
             {checks.map((check) => (
-              <li key={check.name} style={rowStyle}>
+              <li key={check.name} className="ops-row">
                 <strong>{check.name}</strong>{" "}
-                <span data-testid={`check-${check.name}`}>{checkChip(check.status)}</span>
+                <span className={checkBadgeClass(check.status)} data-testid={`check-${check.name}`}>
+                  {checkChip(check.status)}
+                </span>
                 <br />
                 <span>{check.detail}</span>
                 {check.remediation && (

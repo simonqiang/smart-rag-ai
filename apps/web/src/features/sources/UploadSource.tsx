@@ -4,8 +4,6 @@ import { detailText, getJson, postForm } from "../auth/api";
 
 type Collection = { collection_id: string; name: string };
 
-const fieldStyle = { marginBottom: "0.75rem" } as const;
-
 /** Multipart body for POST /api/uploads. */
 export function uploadBody(file: File, collectionId: string, name: string): FormData {
   const body = new FormData();
@@ -64,15 +62,14 @@ export default function UploadSource() {
   }
 
   return (
-    <section aria-labelledby="upload-heading" style={{ marginTop: "1.5rem" }}>
+    <section aria-labelledby="upload-heading" className="upload-panel">
       <h2 id="upload-heading">Upload a source</h2>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      <form onSubmit={submit}>
+      <form onSubmit={submit} className="stack">
         <label>
           Collection
           <select
-            style={fieldStyle}
             value={collectionId}
             onChange={(event) => setCollectionId(event.target.value)}
             required
@@ -87,16 +84,14 @@ export default function UploadSource() {
         <label>
           Source name
           <input
-            style={fieldStyle}
             required
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
         </label>
-        <label>
+        <label className="upload-file-field">
           File (PDF, TXT, or Markdown, up to 50 MB)
           <input
-            style={fieldStyle}
             type="file"
             accept=".pdf,.txt,.md,.markdown"
             required

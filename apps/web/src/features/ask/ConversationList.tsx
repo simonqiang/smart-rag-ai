@@ -5,17 +5,6 @@ import { deleteJson, getJson, putJson } from "../auth/api";
 
 export type { ConversationDetail };
 
-const rowStyle = {
-  border: "1px solid var(--color-border)",
-  borderRadius: "var(--radius-md)",
-  padding: "0.85rem 1rem",
-  marginBottom: "0.6rem",
-  background: "var(--color-surface)",
-  boxShadow: "var(--shadow-xs)",
-} as const;
-const rowActions = { display: "flex", gap: "0.5rem", flexWrap: "wrap" } as const;
-const buttonStyle = { minHeight: "44px" } as const;
-
 export type { ConversationSummary };
 
 /** Own conversations: reopen, rename, delete (two-step confirm, no hover-only). */
@@ -71,7 +60,7 @@ export default function ConversationList({
   }
 
   return (
-    <section aria-label="Conversations">
+    <section className="card stack" aria-label="Conversations">
       <h2>Conversations</h2>
       {error && (
         <p role="alert">
@@ -82,45 +71,45 @@ export default function ConversationList({
       {conversations !== null && conversations.length === 0 && (
         <p>No conversations yet. Your questions will appear here.</p>
       )}
-      <ul style={{ listStyle: "none", padding: 0 }}>
+      <ul className="msg-list">
         {conversations?.map((conversation) => (
-          <li key={conversation.id} style={rowStyle}>
+          <li key={conversation.id} className="msg">
             {renaming === conversation.id ? (
-              <span style={rowActions}>
+              <span className="row">
                 <input
                   aria-label="Conversation title"
+                  className="ask-rename-input"
                   value={draftTitle}
                   onChange={(event) => setDraftTitle(event.target.value)}
-                  style={{ flex: "1 1 8rem", minWidth: 0 }}
                 />
                 <button
                   type="button"
-                  style={buttonStyle}
+                  className="btn-primary"
                   onClick={() => void rename(conversation.id)}
                 >
                   Save title
                 </button>
                 <button
                   type="button"
-                  style={buttonStyle}
+                  className="btn-ghost"
                   onClick={() => setRenaming(null)}
                 >
                   Cancel
                 </button>
               </span>
             ) : confirming === conversation.id ? (
-              <span style={rowActions}>
+              <span className="row">
                 <span role="status">Delete this conversation?</span>
                 <button
                   type="button"
-                  style={buttonStyle}
+                  className="btn-danger"
                   onClick={() => void remove(conversation.id)}
                 >
                   Yes, delete
                 </button>
                 <button
                   type="button"
-                  style={buttonStyle}
+                  className="btn-ghost"
                   onClick={() => setConfirming(null)}
                 >
                   Keep
@@ -130,15 +119,15 @@ export default function ConversationList({
               <>
                 <button
                   type="button"
-                  style={{ ...buttonStyle, textDecoration: "underline", border: "none" }}
+                  className="btn-link"
                   onClick={() => void reopen(conversation.id)}
                 >
                   {conversation.title}
                 </button>
-                <span style={rowActions}>
+                <span className="row">
                   <button
                     type="button"
-                    style={buttonStyle}
+                    className="btn-ghost"
                     onClick={() => {
                       setRenaming(conversation.id);
                       setDraftTitle(conversation.title);
@@ -148,7 +137,7 @@ export default function ConversationList({
                   </button>
                   <button
                     type="button"
-                    style={buttonStyle}
+                    className="btn-ghost"
                     onClick={() => setConfirming(conversation.id)}
                   >
                     Delete

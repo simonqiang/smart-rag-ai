@@ -3,16 +3,6 @@ import { useEffect, useState } from "react";
 import type { Citation } from "./contracts";
 import { getJson } from "../auth/api";
 
-const panelStyle = {
-  border: "1px solid var(--color-primary)",
-  borderRadius: "var(--radius-lg)",
-  background: "var(--color-surface)",
-  boxShadow: "var(--shadow-md)",
-  padding: "1rem",
-  marginTop: "0.75rem",
-} as const;
-const quoteStyle = { margin: "0.5rem 0 0", whiteSpace: "pre-wrap" } as const;
-
 function locationText(citation: Citation): string {
   const where =
     citation.page !== null
@@ -42,7 +32,7 @@ function EvidenceDetails({ citation }: { citation: Citation }) {
   return (
     <>
       <p>{locationText(citation)}</p>
-      <blockquote style={quoteStyle}>“{citation.quote}”</blockquote>
+      <blockquote>“{citation.quote}”</blockquote>
     </>
   );
 }
@@ -57,14 +47,12 @@ export default function EvidencePanel({
 }) {
   if (!citation) return null;
   return (
-    <aside style={panelStyle} aria-label="Evidence">
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+    <aside className="evidence-panel" aria-label="Evidence">
+      <div className="row">
         <strong>Evidence [{citation.label}]</strong>
-        <span style={{ marginLeft: "auto" }}>
-          <button type="button" onClick={onClose} style={{ minHeight: "44px" }}>
-            Close evidence
-          </button>
-        </span>
+        <button type="button" className="btn-ghost evidence-actions" onClick={onClose}>
+          Close evidence
+        </button>
       </div>
       <EvidenceDetails citation={citation} />
     </aside>

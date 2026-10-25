@@ -1,0 +1,20 @@
+/* ============================================================
+   Ops area (Activity + Analytics) — page-scoped styles on top
+   of the shared design system in tokens.css.
+   ============================================================ */
+
+/* Sections are auto-carded by `main > section`; space them out. */
+.ops-section + .ops-section {
+  margin-top: var(--space-xl);
+}
+
+.ops-row {
+  background-color: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+}
+
+.ops-actions {
+  margin-top: var(--space-sm);
+}
